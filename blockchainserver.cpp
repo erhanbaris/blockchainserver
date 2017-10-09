@@ -5,130 +5,19 @@
 #include <string>
 #include <sstream>
 #include <chrono>
-
+#include <Block.h>
+#include <HttpClient.h>
 #include "http_parser.h"
+#include "Tools.h"
 
 namespace
 {
     static http_parser_settings * parser_settings;
     static uv_loop_t* uv_loop;
-
-    static long getUtcMilliseconds()
-    {
-        using namespace std::chrono;
-        milliseconds::rep repTime= duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-        time_t t = time(0);
-        struct tm lt = {0};
-
-#ifdef _WIN32
-        lt = *localtime(&t);
-#else
-        localtime_r(&t, &lt);
-#endif
-        return repTime;
-    }
-}
-
-/* BLOCK */
-Block::Block()
-{
-    Data = NULL;
-    PreviousHash = NULL;
-}
-
-void Block::SetHash()
-{
-    std::string data = std::to_string(Index) + (PreviousHash == NULL ? "" : PreviousHash->Hash) + std::to_string(TimeStamp) + Data;
-
-    SHA256 sha256;
-    sha256.add(&data, data.size());
-    Hash = CalculateHash();
-}
-
-std::string Block::CalculateHash()
-{
-    std::string data = std::to_string(Index) + (PreviousHash == NULL ? "" : PreviousHash->Hash) + std::to_string(TimeStamp) + Data;
-
-    SHA256 sha256;
-    sha256.add(&data, data.size());
-    return sha256.getHash();
 }
 
 
-struct HttpClient
-{
-        void * Handle; // uv_tcp_t
-        void * Parser; // http_parser
-        void * Async; // uv_async_t
 
-        std::map<std::string, std::string> Headers;
-        std::string LastHeaderItem;
-        std::string Url;
-        std::string QueryString;
-        std::string Data;
-        std::string ContentType;
-        std::string Path;
-        BlockChainServerPimpl *ServerPimpl;
-
-        HttpClient()
-        {
-            Handle = nullptr;
-            Parser = nullptr;
-            Async = nullptr;
-        }
-
-        std::stringstream Buffer;
-
-
-        static void sendAsync(uv_async_t *handle) {
-            HttpClient * client = (HttpClient*) handle->data;
-
-            std::string bufferStr = client->Buffer.str();
-            std::ostringstream rep;
-            rep << "HTTP/1.1 200 OK\r\n"
-                << "Content-Type: application/json charset=utf-8\r\n"
-                << "Connection: close\r\n"
-                << "Content-Length: " << bufferStr.size() << "\r\n"
-                << "Access-Control-Allow-Origin: *" << "\r\n"
-                << "\r\n";
-            rep << bufferStr;
-            std::string res = rep.str();
-            uv_buf_t resbuf;
-            resbuf.base = (char *)res.c_str();
-            resbuf.len = res.size();
-
-            uv_write_t *write_req = new uv_write_t;
-
-            int r = uv_write(write_req, (uv_stream_t *) client->Handle, &resbuf, 1,  after_write);
-            uv_close((uv_handle_t*)client->Async, NULL);
-        }
-
-        void Send()
-        {
-            uv_async_send((uv_async_t*)this->Async);
-        }
-
-
-        static void on_close(uv_handle_t* handle) {
-            HttpClient* client = (HttpClient*)handle->data;
-
-            if (client->Parser != nullptr)
-                delete client->Parser;
-
-            if (client->Handle != nullptr)
-                delete client->Handle;
-
-            if (client->Async != nullptr)
-                delete client->Async;
-
-            delete client;
-        }
-
-        static void after_write(uv_write_t* req, int status) {
-            if (!uv_is_closing((uv_handle_t*)req->handle))
-                uv_close((uv_handle_t*)req->handle, on_close);
-        }
-};
 
 /* BLOCK CHAIN SERVER PIMPL*/
 struct BlockChainServerPimpl
@@ -159,10 +48,10 @@ struct BlockChainServerPimpl
             if (nread >= 0) {
                 parsed = (ssize_t)http_parser_execute((http_parser*)client->Parser, parser_settings, buf->base, nread);
                 if (((http_parser*)client->Parser)->upgrade) {
-                    uv_close((uv_handle_t*)client->Handle, HttpClient::on_close);
+                    uv_close((uv_handle_t*)client->Handle, HttpClient::onClose);
                 }
                 else if (parsed < nread) {
-                    uv_close((uv_handle_t*)client->Handle, HttpClient::on_close);
+                    uv_close((uv_handle_t*)client->Handle, HttpClient::onClose);
                 }
             }
             else {
@@ -195,11 +84,6 @@ struct BlockChainServerPimpl
                     const char * data = url + u.field_data[UF_PATH].off;
                     client->Url = std::string(data, u.field_data[UF_PATH].len);
                 }
-
-                if ((u.field_set & (1 << UF_QUERY))) {
-                    const char * data = url + u.field_data[UF_QUERY].off;
-                    client->QueryString = std::string(data, u.field_data[UF_QUERY].len);
-                }
             }
             return 0;
         }
@@ -214,7 +98,7 @@ struct BlockChainServerPimpl
 
         static int on_body(http_parser* parser, const char* at, size_t length) {
             HttpClient* client = (HttpClient*)parser->data;
-            client->Data = std::string(at, length);
+            client->RequestBuffer = std::string(at, length);
             return 0;
         }
 
@@ -246,13 +130,13 @@ struct BlockChainServerPimpl
 
         void addCall(HttpClient* client)
         {
-            Block * block = generateNewBlock(client->Data.c_str());
-            client->Buffer << block->Hash;
+            Block * block = generateNewBlock(client->RequestBuffer.c_str());
+            client->ResponseBuffer << block->Hash;
         }
 
         void totalBlockCall(HttpClient* client)
         {
-            client->Buffer << std::to_string(totalBlocks);
+            client->ResponseBuffer << std::to_string(totalBlocks);
         }
 
         static int on_message_complete(http_parser* parser) {
@@ -263,10 +147,9 @@ struct BlockChainServerPimpl
             if (client->Url == "/totalblocks")
                 client->ServerPimpl->totalBlockCall(client);
             else
-                client->Buffer << client->Url;
+                client->ResponseBuffer << client->Url;
 
             client->Send();
-
             return 0;
         }
 
@@ -313,22 +196,26 @@ BlockChainServer::~BlockChainServer()
 
 void BlockChainServer::Start(size_t port)
 {
-    parser_settings->on_url = pimpl->on_url;
+	parser_settings->on_url = pimpl->on_url;
 
-    parser_settings->on_message_begin = pimpl->on_message_begin;
-    parser_settings->on_headers_complete = pimpl->on_headers_complete;
-    parser_settings->on_message_complete = pimpl->on_message_complete;
+	parser_settings->on_message_begin = pimpl->on_message_begin;
+	parser_settings->on_headers_complete = pimpl->on_headers_complete;
+	parser_settings->on_message_complete = pimpl->on_message_complete;
 
-    parser_settings->on_header_field = pimpl->on_header_field;
-    parser_settings->on_header_value = pimpl->on_header_value;
-    parser_settings->on_body = pimpl->on_body;
+	parser_settings->on_header_field = pimpl->on_header_field;
+	parser_settings->on_header_value = pimpl->on_header_value;
+	parser_settings->on_body = pimpl->on_body;
 
-    uv_loop = uv_default_loop();
-    uv_tcp_init(uv_loop, pimpl->tcpServer);
-    struct sockaddr_in address;
-    uv_ip4_addr("0.0.0.0", port, &address);
-    uv_tcp_bind(pimpl->tcpServer, (const struct sockaddr*)&address, 0);
-    uv_listen((uv_stream_t*)pimpl->tcpServer, 1000, BlockChainServerPimpl::on_connect);
+	uv_loop = uv_default_loop();
+	uv_tcp_init(uv_loop, pimpl->tcpServer);
+	struct sockaddr_in address;
+	uv_ip4_addr("0.0.0.0", port, &address);
+	uv_tcp_bind(pimpl->tcpServer, (const struct sockaddr*)&address, 0);
+	uv_listen((uv_stream_t*)pimpl->tcpServer, 1000, BlockChainServerPimpl::on_connect);
 
-    uv_run(uv_loop, UV_RUN_DEFAULT);
+	uv_run(uv_loop, UV_RUN_DEFAULT);
+}
+
+void BlockChainServer::Stop()
+{ 
 }
