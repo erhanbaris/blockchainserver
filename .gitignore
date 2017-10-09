@@ -30,3 +30,8 @@
 *.exe
 *.out
 *.app
+/BlockChainServer/CMakeLists.txt.user
+/BlockChainServer/CMakeLists.txt.user
+*.user
+*.user
+/build-BlockChainServer-Desktop_Qt_5_6_2_MSVC2015_32bit-Default
