@@ -3,8 +3,9 @@ cmake_minimum_required(VERSION 2.8)
 include(cmake/common.cmake)
 include(cmake/options.cmake)
 include(cmake/http_parser.cmake)
-include(cmake/uv.cmake)
+#include(cmake/uv.cmake)
 
+add_subdirectory(deps/uv)
 add_subdirectory(deps/websocketpp)
 
 project(BlockChainServer)

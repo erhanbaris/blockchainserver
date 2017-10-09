@@ -107,7 +107,7 @@ struct BlockChainServerPimpl
             Block * block = new Block;
             block->Index = lastBlock->Index + 1;
             block->PreviousHash = lastBlock;
-            block->TimeStamp = getUtcMilliseconds();
+            block->TimeStamp = (size_t) getUtcMilliseconds();
             block->Data = strdup(data);
             block->SetHash();
 
@@ -144,7 +144,7 @@ struct BlockChainServerPimpl
 
             if (client->Url == "/add")
                 client->ServerPimpl->addCall(client);
-            if (client->Url == "/totalblocks")
+            else if (client->Url == "/totalblocks")
                 client->ServerPimpl->totalBlockCall(client);
             else
                 client->ResponseBuffer << client->Url;
