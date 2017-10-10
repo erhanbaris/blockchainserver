@@ -27,6 +27,7 @@
 
 #ifndef WEBSOCKETPP_COMMON_ASIO_HPP
 #define WEBSOCKETPP_COMMON_ASIO_HPP
+#define ASIO_STANDALONE
 
 // This file goes to some length to preserve compatibility with versions of 
 // boost older than 1.49 (where the first modern steady_timer timer based on 
