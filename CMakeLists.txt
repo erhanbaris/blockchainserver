@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DASIO_STANDALONE")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DASIO_STANDALONE -D_WEBSOCKETPP_CPP11_TYPE_TRAITS_")
 
 include(cmake/common.cmake)
 include(cmake/options.cmake)

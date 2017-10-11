@@ -107,7 +107,7 @@ struct BlockChainServerPimpl
             Block * block = new Block;
             block->Index = lastBlock->Index + 1;
             block->PreviousHash = lastBlock;
-            block->TimeStamp = (size_t) getUtcMilliseconds();
+            block->TimeStamp = getTimestamp();
             block->Data = strdup(data);
             block->SetHash();
 
@@ -123,7 +123,7 @@ struct BlockChainServerPimpl
                 return false;
             else if (previousBlock->Hash != newBlock->PreviousHash->Hash)
                 return false;
-            else if (newBlock->CalculateHash() != newBlock->Hash)
+            else if (strcmp(newBlock->CalculateHash().Hash, newBlock->Hash.c_str()) != 0)
                 return false;
             return true;
         }
@@ -178,8 +178,10 @@ struct BlockChainServerPimpl
 BlockChainServer::BlockChainServer()
     :pimpl(new BlockChainServerPimpl(this))
 {
+	//Genesis block
     pimpl->firstBlock = new Block;
     pimpl->firstBlock->Index = 1;
+    pimpl->firstBlock->Nonce = 1;
     pimpl->firstBlock->PreviousHash = NULL;
     pimpl->firstBlock->TimeStamp = 1507493846081;
     pimpl->firstBlock->Data = strdup("Init block");
@@ -213,6 +215,7 @@ void BlockChainServer::Start(size_t port)
 	uv_tcp_bind(pimpl->tcpServer, (const struct sockaddr*)&address, 0);
 	uv_listen((uv_stream_t*)pimpl->tcpServer, 1000, BlockChainServerPimpl::on_connect);
 
+    INFO << "Http Server Started";
 	uv_run(uv_loop, UV_RUN_DEFAULT);
 }
 

@@ -3,16 +3,18 @@
 #include <string>
 #include <vector>
 #include <sha256.h>
+#include <Tools.h>
 
 struct Block
 {
 	std::size_t Index;
 	std::string Hash;
 	Block* PreviousHash;
-	std::size_t TimeStamp;
+	long int TimeStamp;
+	std::size_t Nonce;
 	char* Data;
 
 	Block();
 	void SetHash();
-	std::string CalculateHash();
+	MineInfo CalculateHash();
 };
