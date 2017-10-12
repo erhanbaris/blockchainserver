@@ -2,15 +2,18 @@
 
 #include <WebSocketServer.h>
 #include <WebSocketPPServer.h>
+
+#include <WebSocketClient.h>
+#include <WebSocketPPClient.h>
+
 #include <Config.h>
+
 #include <vector>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/common/thread.hpp>
 #include <websocketpp/server.hpp>
-#include <websocketpp/client.hpp>
 
-typedef websocketpp::client<websocketpp::config::asio> client;
 typedef websocketpp::server<websocketpp::config::asio> server;
 
 using websocketpp::connection_hdl;
@@ -52,7 +55,7 @@ struct WebSocketPPServerPimpl
 	bool executionThreadRunning;
 
     WebSocketPPServer* socketServer;
-    int port;
+    size_t port;
     server server;
     con_list connections;
     std::queue<action> actions;
@@ -61,7 +64,7 @@ struct WebSocketPPServerPimpl
     mutex connection_lock;
     condition_variable action_cond;
 
-	std::vector<client*> remoteNodeConnections;
+	std::vector<WebSocketClient*> remoteNodeConnections;
 
     WebSocketPPServerPimpl()
     {
@@ -96,6 +99,8 @@ struct WebSocketPPServerPimpl
 	}
     
     void onOpen(connection_hdl hdl) {
+        INFO << "new connectiom";
+        
         {
             lock_guard<mutex> guard(action_lock);
             actions.push(action(SUBSCRIBE,hdl));
@@ -171,11 +176,16 @@ private:
     }
 };
 
-void WebSocketPPServer::Start(int port) {
+void WebSocketPPServer::Start(size_t port) {
     pimpl->port = port;
     pimpl->mainThread = new thread(bind(&WebSocketPPServerPimpl::Start, pimpl));
 
 	INFO << "WebSocket Server Started";
+}
+
+size_t WebSocketPPServer::GetPort()
+{
+    return pimpl->port;
 }
 
 void WebSocketPPServer::Init() {
@@ -204,8 +214,20 @@ void WebSocketPPServer::BroadcastBlock(Block*block)
 		INFO << "Block is empty";
 }
 
-void WebSocketPPServer::ConnectToNode(std::string)
+namespace  {
+    void onConnect(std::string const & message, WebSocketClient& client)
+    {
+        INFO << "Received";
+        INFO << message;
+    }
+}
+
+void WebSocketPPServer::ConnectToNode(std::string address)
 {
+    WebSocketClient *webClient = new WebSocketPPClient;
+    webClient->setOnMessage(onConnect);
+    webClient->Connect(address);
+    INFO << "Trying to connect : " << address;
 	// Connect to remote server
 }
 

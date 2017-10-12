@@ -14,8 +14,9 @@ class WebSocketPPServer : public WebSocketServer {
 public:
     void Init();
 
-    void Start(int port);
+    void Start(size_t port);
     void Stop();
+    size_t GetPort();
 	void BroadcastBlock(Block*);
 	void ConnectToNode(std::string);
 

@@ -135,9 +135,11 @@ struct BlockChainServerPimpl
 		if (client->Url == "/add")
 			client->ServerPimpl->addCall(client);
 		else if (client->Url == "/totalblocks")
-			client->ServerPimpl->totalBlockCall(client);
-		else if (client->Url == "/allblocks")
-			client->ResponseBuffer << client->ServerPimpl->chain->SerializeChain();
+            client->ServerPimpl->totalBlockCall(client);
+        else if (client->Url == "/allblocks")
+            client->ResponseBuffer << client->ServerPimpl->chain->SerializeChain();
+        else if (client->Url == "/client")
+            client->ServerPimpl->webSocket->ConnectToNode("ws://127.0.0.1:" + std::to_string(client->ServerPimpl->webSocket->GetPort()));
 		else
 			client->ResponseBuffer << client->Url;
 
