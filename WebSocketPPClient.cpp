@@ -116,8 +116,7 @@ void WebSocketPPClient::Connect(std::string& address)
     pimpl->address = address;
     
     
-    pimpl->client.clear_access_channels(websocketpp::log::alevel::frame_header);
-    pimpl->client.clear_access_channels(websocketpp::log::alevel::frame_payload);
+    pimpl->client.clear_access_channels(websocketpp::log::alevel::all);
     //c.set_error_channels(websocketpp::log::elevel::none);
     
     pimpl->client.init_asio();

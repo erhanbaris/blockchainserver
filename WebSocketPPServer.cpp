@@ -192,6 +192,8 @@ void WebSocketPPServer::Init() {
     pimpl = new WebSocketPPServerPimpl;
     pimpl->socketServer = this;
 
+    pimpl->server.clear_access_channels(websocketpp::log::alevel::all);
+
     pimpl->server.init_asio();
 
     pimpl->server.set_open_handler(bind(&WebSocketPPServerPimpl::onOpen,pimpl,::_1));
@@ -215,17 +217,23 @@ void WebSocketPPServer::BroadcastBlock(Block*block)
 }
 
 namespace  {
-    void onConnect(std::string const & message, WebSocketClient& client)
+    void onMessage(std::string const & message, WebSocketClient& client)
     {
         INFO << "Received";
         INFO << message;
+    }
+
+    void onConnect(WebSocketClient& client)
+    {
+        INFO << "Connected";
     }
 }
 
 void WebSocketPPServer::ConnectToNode(std::string address)
 {
     WebSocketClient *webClient = new WebSocketPPClient;
-    webClient->setOnMessage(onConnect);
+    webClient->setOnMessage(onMessage);
+    webClient->setOnConnect(onConnect);
     webClient->Connect(address);
     INFO << "Trying to connect : " << address;
 	// Connect to remote server
