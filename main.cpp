@@ -16,13 +16,13 @@ using namespace std;
 int main(int argc, char *argv[])
 {
     INFO << "WebSocket Server Port : " << WEBSOCKET_SERVER_PORT;
-	auto result = MineHash(1, "merhaba dünya", strlen("merhaba dünya"));
     WebSocketServer * socket = new WebSocketPPServer;
     socket->Init();
     socket->Start(WEBSOCKET_SERVER_PORT);
 
     INFO << "Http Server Port : " << HTTP_SERVER_PORT;
     BlockChainServer server;
+	server.SetWebSocket(socket);
     server.Start(HTTP_SERVER_PORT);
 
 

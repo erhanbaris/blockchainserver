@@ -6,7 +6,7 @@
 class BlockChain {
 public:
     BlockChain();
-    Block* NewBlock(char * data);
+    Block* NewBlock(char const* data);
     size_t TotalBlocks();
     bool IsBlockChainValid();
 

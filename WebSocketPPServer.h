@@ -2,12 +2,11 @@
 
 #include <WebSocketServer.h>
 
-
 #include <iostream>
 #include <set>
+#include <functional>
 
 using namespace std;
-
 
 
 struct WebSocketPPServerPimpl;
@@ -17,6 +16,7 @@ public:
 
     void Start(int port);
     void Stop();
+	void BroadcastBlock(Block*);
 
 private:
     WebSocketPPServerPimpl *pimpl;

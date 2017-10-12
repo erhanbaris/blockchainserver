@@ -19,7 +19,7 @@ BlockChain::BlockChain()
     blocks.push_back(genesisBlock);
 }
 
-Block* BlockChain::NewBlock(char * data)
+Block* BlockChain::NewBlock(char const * data)
 {
     Block * block = new Block;
     block->Index = lastBlock->Index + 1;

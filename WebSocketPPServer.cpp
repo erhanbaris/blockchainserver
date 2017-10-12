@@ -2,6 +2,7 @@
 
 #include <WebSocketServer.h>
 #include <WebSocketPPServer.h>
+#include <Config.h>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/common/thread.hpp>
@@ -133,6 +134,8 @@ private:
 void WebSocketPPServer::Start(int port) {
     pimpl->port = port;
     pimpl->mainThread = new thread(bind(&WebSocketPPServerPimpl::Start, pimpl));
+
+	INFO << "WebSocket Server Started";
 }
 
 void WebSocketPPServer::Init() {
@@ -144,6 +147,14 @@ void WebSocketPPServer::Init() {
     pimpl->server.set_open_handler(bind(&WebSocketPPServerPimpl::onOpen,pimpl,::_1));
     pimpl->server.set_close_handler(bind(&WebSocketPPServerPimpl::onClose,pimpl,::_1));
     pimpl->server.set_message_handler(bind(&WebSocketPPServerPimpl::onMessage, pimpl,::_1,::_2));
+}
+
+void WebSocketPPServer::BroadcastBlock(Block*block)
+{
+	if (block != NULL)
+		INFO << block->Encode();
+	else
+		INFO << "Block is empty";
 }
 
 void WebSocketPPServer::Stop()

@@ -17,4 +17,6 @@ struct Block
 	Block();
 	void SetHash();
 	MineInfo CalculateHash();
+	std::string Encode();
+	static Block* Decode(std::string);
 };
