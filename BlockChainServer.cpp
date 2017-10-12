@@ -137,7 +137,7 @@ struct BlockChainServerPimpl
 		else if (client->Url == "/totalblocks")
 			client->ServerPimpl->totalBlockCall(client);
 		else if (client->Url == "/allblocks")
-			;
+			client->ResponseBuffer << client->ServerPimpl->chain->SerializeChain();
 		else
 			client->ResponseBuffer << client->Url;
 

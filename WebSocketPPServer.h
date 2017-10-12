@@ -17,6 +17,7 @@ public:
     void Start(int port);
     void Stop();
 	void BroadcastBlock(Block*);
+	void ConnectToNode(std::string);
 
 private:
     WebSocketPPServerPimpl *pimpl;

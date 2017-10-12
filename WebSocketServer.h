@@ -10,4 +10,5 @@ public:
     virtual void Stop() = 0;
 
 	virtual void BroadcastBlock(Block*) = 0;
+	virtual void ConnectToNode(std::string) = 0;
 };

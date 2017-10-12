@@ -3,11 +3,14 @@
 #include <WebSocketServer.h>
 #include <WebSocketPPServer.h>
 #include <Config.h>
+#include <vector>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/common/thread.hpp>
 #include <websocketpp/server.hpp>
+#include <websocketpp/client.hpp>
 
+typedef websocketpp::client<websocketpp::config::asio> client;
 typedef websocketpp::server<websocketpp::config::asio> server;
 
 using websocketpp::connection_hdl;
@@ -30,19 +33,24 @@ enum action_type {
 };
 
 struct action {
+	action(action_type t, std::string m) : type(t), str(m) {}
+	action(action_type t, server::message_ptr m) : type(t), msg(m) {}
     action(action_type t, connection_hdl h) : type(t), hdl(h) {}
-    action(action_type t, connection_hdl h, server::message_ptr m)
-    : type(t), hdl(h), msg(m) {}
+    action(action_type t, connection_hdl h, server::message_ptr m) : type(t), hdl(h), msg(m) {}
     
     action_type type;
     websocketpp::connection_hdl hdl;
     server::message_ptr msg;
+	std::string str;
 };
 
 struct WebSocketPPServerPimpl
 {
     thread* mainThread;
     thread* executionThread;
+
+	bool executionThreadRunning;
+
     WebSocketPPServer* socketServer;
     int port;
     server server;
@@ -53,12 +61,39 @@ struct WebSocketPPServerPimpl
     mutex connection_lock;
     condition_variable action_cond;
 
+	std::vector<client*> remoteNodeConnections;
+
     WebSocketPPServerPimpl()
     {
+		executionThreadRunning = true;
+
         socketServer = NULL;
         mainThread = NULL;
         executionThread = NULL;
     }
+
+	~WebSocketPPServerPimpl()
+	{
+		/* Stop execution thread */
+		executionThreadRunning = false;
+		action_cond.notify_one();
+
+		/* Close all connections */
+		auto connectionsEnd = connections.end();
+		for (auto it = connections.begin(); it != connectionsEnd; ++it)
+		{
+			server.pause_reading(*it);
+			server.close(*it, websocketpp::close::status::going_away, "");
+		}
+		connections.clear();
+
+		/* Stop server accept and close port */
+		server.stop_listening();
+		server.stop();
+
+		/* Bye bye thread */
+		delete mainThread;
+	}
     
     void onOpen(connection_hdl hdl) {
         {
@@ -100,7 +135,7 @@ struct WebSocketPPServerPimpl
 
 private:
     void internalStart() {
-        while(1) {
+        while(executionThreadRunning) {
             unique_lock<mutex> lock(action_lock);
             
             while(actions.empty()) {
@@ -122,12 +157,17 @@ private:
                 lock_guard<mutex> guard(connection_lock);
                 
                 con_list::iterator it;
-                for (it = connections.begin(); it != connections.end(); ++it) {
-                    server.send(*it,a.msg);
+				auto end = connections.end();
+                for (it = connections.begin(); it != end; ++it) {
+					websocketpp::lib::error_code ec;
+					server.get_alog().write(websocketpp::log::alevel::app, a.str);
+					server.send(*it, a.str, websocketpp::frame::opcode::text, ec);
                 }
             } else {
             }
         }
+
+		delete executionThread;
     }
 };
 
@@ -152,9 +192,21 @@ void WebSocketPPServer::Init() {
 void WebSocketPPServer::BroadcastBlock(Block*block)
 {
 	if (block != NULL)
-		INFO << block->Encode();
+	{
+		{
+			lock_guard<mutex> guard(pimpl->action_lock);
+			pimpl->actions.push(action(MESSAGE, block->Encode()));
+		}
+
+		pimpl->action_cond.notify_one();
+	}
 	else
 		INFO << "Block is empty";
+}
+
+void WebSocketPPServer::ConnectToNode(std::string)
+{
+	// Connect to remote server
 }
 
 void WebSocketPPServer::Stop()

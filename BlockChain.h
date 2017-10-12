@@ -9,6 +9,7 @@ public:
     Block* NewBlock(char const* data);
     size_t TotalBlocks();
     bool IsBlockChainValid();
+	std::string SerializeChain();
 
 private:
     Block* lastBlock;

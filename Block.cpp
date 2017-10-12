@@ -5,7 +5,6 @@
 
 Block::Block()
 {
-	Data = NULL;
 	PreviousHash = NULL;
 }
 
@@ -19,7 +18,7 @@ void Block::SetHash()
 MineInfo Block::CalculateHash()
 {
 	std::string data = (PreviousHash == NULL ? "" : PreviousHash->Hash) + std::to_string(TimeStamp) + Data;
-	MineInfo miningResult = MineHash(Index, data.c_str(), data.size());
+	MineInfo miningResult = MineHash(Index, data);
 	return miningResult;
 }
 
@@ -28,7 +27,7 @@ std::string Block::Encode()
 	std::stringstream stream;
 
 	std::string encodedData;
-	Base64::Encode(std::string(Data), &encodedData);
+	Base64::Encode(Data, &encodedData);
 	stream << "{"
 			<< "\"Index\":" << Index << ","
 			<< "\"Hash\":\"" << Hash << "\","

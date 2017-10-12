@@ -15,13 +15,12 @@ static long int getTimestamp()
 	return now;
 }
 
-
 struct MineInfo {
 	size_t Nounce;
-	char * Hash;
+	std::string Hash;
 };
 
-static MineInfo MineHash(size_t index, char const * data, size_t length)
+static MineInfo MineHash(size_t index, std::string & data)
 {
 	struct MineInfo result;
 
@@ -37,15 +36,20 @@ static MineInfo MineHash(size_t index, char const * data, size_t length)
 		sha256.reset();
 
 		sha256.add(tmp.c_str(), tmp.size());
-		sha256.add(data, length);
+		sha256.add(data.c_str(), data.size());
 		auto hash = sha256.getHash();
 		if (hash.substr(0, DIFFICULTY) == NOUNCE_ZEROS)
 		{
-			result.Hash = strdup(hash.c_str());
+			result.Hash = hash;
 			result.Nounce = i;
 			break;
 		}
 	}
 
 	return result;
+}
+
+inline static bool isInteger(char *str)
+{
+	return strlen(str) != 0 && strspn(str, "0123456789") == strlen(str);
 }

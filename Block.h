@@ -12,7 +12,7 @@ struct Block
 	Block* PreviousHash;
 	long int TimeStamp;
 	std::size_t Nonce;
-	char* Data;
+	std::string Data;
 
 	Block();
 	void SetHash();
