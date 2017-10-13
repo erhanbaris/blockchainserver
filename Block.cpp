@@ -5,7 +5,8 @@
 
 Block::Block()
 {
-	PreviousHash = NULL;
+	PreviousHash = "0";
+	PreviousBlock = NULL;
 }
 
 void Block::SetHash()
@@ -17,7 +18,7 @@ void Block::SetHash()
 
 MineInfo Block::CalculateHash()
 {
-	std::string data = (PreviousHash == NULL ? "" : PreviousHash->Hash) + std::to_string(TimeStamp) + Data;
+	std::string data = PreviousHash + std::to_string(TimeStamp) + Data;
 	MineInfo miningResult = MineHash(Index, data);
 	return miningResult;
 }
@@ -31,7 +32,7 @@ std::string Block::Encode()
 	stream << "{"
 			<< "\"Index\":" << Index << ","
 			<< "\"Hash\":\"" << Hash << "\","
-			<< "\"PreviousHash\":\"" << (PreviousHash == NULL ? "0000000000000000000000000000000" : PreviousHash->Hash) << "\","
+			<< "\"PreviousHash\":\"" << PreviousHash << "\","
 			<< "\"TimeStamp\":" << TimeStamp << ","
 			<< "\"Nonce\":" << Nonce << ","
 			<< "\"Data\":\"" << encodedData << "\""
@@ -40,7 +41,68 @@ std::string Block::Encode()
 	return stream.str();
 }
 
-Block* Decode(std::string)
+namespace
 {
-	return NULL;
+	static Block* fetchBlocksFromJson(json11::Json const& json)
+	{
+		Block* newBlock = new Block;
+		newBlock->Hash = json["Hash"].string_value();
+		newBlock->Index = json["Index"].int_value();
+		newBlock->Nonce = json["Nonce"].int_value();
+		newBlock->TimeStamp = json["TimeStamp"].int_value();
+		newBlock->PreviousHash = json["PreviousHash"].string_value();
+		auto data = json["Data"].string_value();
+
+		if (!data.empty())
+			Base64::Decode(data, &newBlock->Data);
+
+		return newBlock;
+	}
+}
+
+void Block::Decode(json11::Json const& json, Block* newBlock)
+{
+	newBlock = fetchBlocksFromJson(json);
+}
+
+void Block::Decode(std::string const& message, Block* newBlock)
+{
+	std::string err;
+	const json11::Json json = json11::Json::parse(message, err);
+
+	if (err.empty())
+		Block::Decode(json, newBlock);
+	else
+		newBlock = NULL;
+}
+
+void Block::Decode(json11::Json const& json, Block* newBlock, size_t * totalBlocks)
+{
+	if (json.is_array())
+	{
+		auto jsonArray = json.array_items();
+		auto end = jsonArray.end();
+		for (auto it = jsonArray.begin(); it != end; ++it)
+		{
+			auto block = fetchBlocksFromJson(*it);
+			block->PreviousBlock = newBlock;
+			newBlock = block;
+		}
+
+		(*totalBlocks) = jsonArray.size();
+	}
+	else
+	{
+		newBlock = fetchBlocksFromJson(json);
+		(*totalBlocks) = 1;
+	}
+}
+
+void Block::Decode(std::string const& message, Block* newBlock, size_t * totalBlocks)
+{
+	std::string err;
+	const json11::Json json = json11::Json::parse(message, err);
+
+	if (err.empty())
+		Block::Decode(json, newBlock, totalBlocks);
 }

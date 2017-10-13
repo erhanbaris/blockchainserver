@@ -8,7 +8,6 @@
 
 using namespace std;
 
-
 struct WebSocketPPServerPimpl;
 class WebSocketPPServer : public WebSocketServer {
 public:
@@ -18,7 +17,10 @@ public:
     void Stop();
     size_t GetPort();
 	void BroadcastBlock(Block*);
-	void ConnectToNode(std::string);
+	WebSocketServer::ConnectToBlockStatus ConnectToNode(std::string);
+	void DisconnectFromNode(std::string);
+	const std::vector<std::string> ConnectedNodes();
+	void SetMessageReceived(OnMessageReceivedCallback cb);
 
 private:
     WebSocketPPServerPimpl *pimpl;

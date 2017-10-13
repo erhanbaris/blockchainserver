@@ -9,6 +9,7 @@ include(cmake/http_parser.cmake)
 
 add_subdirectory(deps/uv)
 add_subdirectory(deps/websocketpp)
+add_subdirectory(deps/json11)
 
 project(BlockChainServer)
 
@@ -24,10 +25,12 @@ include_directories(deps/uv/include)
 include_directories(deps/http_parser)
 include_directories(deps/hash-library)
 include_directories(deps/websocketpp)
+include_directories(deps/json11)
 include_directories(.)
 
 aux_source_directory(. SRC_LIST)
 aux_source_directory(deps/hash-library SRC_LIST)
+aux_source_directory(deps/json11 SRC_LIST)
 
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME} http_parser uv)

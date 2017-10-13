@@ -4,12 +4,14 @@
 #include <vector>
 #include <sha256.h>
 #include <Tools.h>
+#include <json11.hpp>
 
 struct Block
 {
 	std::size_t Index;
 	std::string Hash;
-	Block* PreviousHash;
+	Block* PreviousBlock;
+	std::string PreviousHash;
 	long int TimeStamp;
 	std::size_t Nonce;
 	std::string Data;
@@ -18,5 +20,10 @@ struct Block
 	void SetHash();
 	MineInfo CalculateHash();
 	std::string Encode();
-	static Block* Decode(std::string);
+	
+	static void Decode(std::string const& message, Block* newBlock);
+	static void Decode(std::string const& message, Block* newBlock, size_t * totalBlocks); 
+
+	static void Decode(json11::Json const& json, Block* newBlock); 
+	static void Decode(json11::Json const& json, Block* newBlock, size_t * totalBlocks);
 };

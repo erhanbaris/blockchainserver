@@ -8,7 +8,8 @@ BlockChain::BlockChain()
 	Block* genesisBlock = new Block;
 	genesisBlock->Index = 1;
 	genesisBlock->Nonce = 1;
-	genesisBlock->PreviousHash = NULL;
+	genesisBlock->PreviousBlock = NULL;
+	genesisBlock->PreviousHash = "0";
 	genesisBlock->TimeStamp = 1507493846081;
 	genesisBlock->Data = "Genesis block";
 	genesisBlock->SetHash();
@@ -25,7 +26,8 @@ Block* BlockChain::NewBlock(char const * data)
 {
 	Block * block = new Block;
 	block->Index = lastBlock->Index + 1;
-	block->PreviousHash = lastBlock;
+	block->PreviousBlock = lastBlock;
+	block->PreviousHash = lastBlock->Hash;
 	block->TimeStamp = getTimestamp();
 	block->Data = strdup(data);
 	block->SetHash();
@@ -49,7 +51,7 @@ bool BlockChain::isValidNewBlock(Block * newBlock, Block * previousBlock)
 
 	if (previousBlock->Index + 1 != newBlock->Index)
 		return false;
-	else if (previousBlock->Hash != newBlock->PreviousHash->Hash)
+	else if (previousBlock->Hash != newBlock->PreviousHash)
 		return false;
 	else if (newBlock->CalculateHash().Hash != newBlock->Hash)
 		return false;
@@ -62,18 +64,17 @@ bool BlockChain::IsBlockChainValid() {
 	std::vector<Block*>::reverse_iterator it = blocks.rbegin();
 
 	for (; it != end; ++it)
-		if (isValidNewBlock(*it, (*it)->PreviousHash) == false)
+		if (isValidNewBlock(*it, (*it)->PreviousBlock) == false)
 			return false;
 
 	return true;
 }
 
-
-std::string BlockChain::SerializeChain()
+std::string BlockChain::SerializeChain(size_t startBlock)
 {
 	std::stringstream stream;
 	auto end = blocks.end();
-	auto it = blocks.begin();
+	auto it = blocks.begin() + startBlock;
 
 	stream << "[";
 	if (end != it)
@@ -91,4 +92,14 @@ std::string BlockChain::SerializeChain()
 	stream << "]";
 
 	return stream.str();
+}
+
+std::string BlockChain::SerializeChain()
+{
+	return SerializeChain(0);
+}
+
+Block* BlockChain::GetLastBlock()
+{
+	return lastBlock;
 }

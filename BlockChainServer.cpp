@@ -10,6 +10,7 @@
 #include <HttpClient.h>
 #include "http_parser.h"
 #include "Tools.h"
+#include <json11.hpp>
 
 namespace
 {
@@ -112,16 +113,45 @@ struct BlockChainServerPimpl
 		return 0;
 	}
 
-	void addCall(HttpClient* client)
+	void addBlockCall(HttpClient* client)
 	{
 		Block * block = chain->NewBlock(client->RequestBuffer.c_str());
 		if (block != NULL)
 			client->ResponseBuffer << "{\"Status\":true,\"Nonce\":" << block->Nonce << ",\"Hash\":\"" << block->Hash << "\"}";
-		else 
+		else
 			client->ResponseBuffer << "{\"Status\":false,\"Nonce\":" << block->Nonce << ",\"Hash\":\"" << block->Hash << "\"}";
 
 		if (webSocket != NULL)
 			webSocket->BroadcastBlock(block);
+	}
+
+	void addNodeCall(HttpClient* client)
+	{
+		auto status = client->ServerPimpl->webSocket->ConnectToNode(client->RequestBuffer.c_str());
+		if (status == WebSocketServer::ConnectToBlockStatus::ADDED)
+			client->ResponseBuffer << "{\"Status\":true}";
+		else
+			client->ResponseBuffer << "{\"Status\":false,\"Message\":\"Node already added.\"}";
+	}
+
+	void nodeListCall(HttpClient* client)
+	{
+		auto nodes = client->ServerPimpl->webSocket->ConnectedNodes();
+		auto nodesEnd = nodes.end();
+		auto it = nodes.begin();
+
+		client->ResponseBuffer << "{\"Status\":true,\"Nodes\":[";
+
+		if (it != nodesEnd)
+		{
+			client->ResponseBuffer << "\"" << *it << "\"";
+			++it;
+
+			for (; it != nodesEnd; ++it)
+				client->ResponseBuffer << "," << "\"" << *it << "\"";
+		}
+
+		client->ResponseBuffer << "]}";
 	}
 
 	void totalBlockCall(HttpClient* client)
@@ -132,16 +162,25 @@ struct BlockChainServerPimpl
 	static int on_message_complete(http_parser* parser) {
 		HttpClient* client = (HttpClient*)parser->data;
 
-		if (client->Url == "/add")
-			client->ServerPimpl->addCall(client);
-		else if (client->Url == "/totalblocks")
-            client->ServerPimpl->totalBlockCall(client);
-        else if (client->Url == "/allblocks")
-            client->ResponseBuffer << client->ServerPimpl->chain->SerializeChain();
-        else if (client->Url == "/client")
-            client->ServerPimpl->webSocket->ConnectToNode("ws://127.0.0.1:" + std::to_string(client->ServerPimpl->webSocket->GetPort()));
+		if (client->Url == "/createblock")
+			client->ServerPimpl->addBlockCall(client);
+		else if (client->Url == "/count")
+			client->ServerPimpl->totalBlockCall(client);
+		else if (client->Url == "/allblocks")
+			client->ResponseBuffer << client->ServerPimpl->chain->SerializeChain();
+		else if (client->Url == "/addnode")
+			client->ServerPimpl->addNodeCall(client);
+		else if (client->Url == "/nodes")
+			client->ServerPimpl->nodeListCall(client);
+		else if (client->Url == "/removenode")
+			client->ServerPimpl->webSocket->DisconnectFromNode(client->RequestBuffer.c_str());
+		else if (client->Url == "/testclient")
+		{
+			client->RequestBuffer = "ws://127.0.0.1:" + std::to_string(client->ServerPimpl->webSocket->GetPort());
+			client->ServerPimpl->addNodeCall(client);
+		}
 		else
-			client->ResponseBuffer << client->Url;
+			client->ResponseBuffer << "{\"Status\":false,\"Message\":\"Page not found\"}";
 
 		client->Send();
 		return 0;
@@ -165,6 +204,51 @@ struct BlockChainServerPimpl
 		int r = uv_accept(server_handle, (uv_stream_t*)client->Handle);
 
 		uv_read_start((uv_stream_t*)client->Handle, alloc_cb, on_read);
+	}
+
+	/* Block information received from remote node*/
+	void onMessageReceived(std::string const& message, WebSocketClient& client)
+	{
+		std::string err;
+		const json11::Json json = json11::Json::parse(message, err);
+
+		if (err.empty())
+		{
+			MessageType messageType = (MessageType)json["Type"].int_value();
+			switch (messageType)
+			{
+			case MessageType::RES_LAST_BLOCK:
+			{
+				Block* block = NULL;
+				Block::Decode(json["Block"], block);
+				break;
+			}
+
+			case MessageType::RES_PARTIAL_BLOCKCHAIN:
+			case MessageType::RES_FULL_BLOCKCHAIN:
+			{
+				size_t totalBlocks = 0;
+				Block* block = NULL;
+				Block::Decode(json["Block"], block, &totalBlocks);
+				break;
+			}
+
+			case MessageType::REQ_FULL_BLOCKCHAIN:
+				client.Send(chain->SerializeChain());
+				break;
+
+			case MessageType::REQ_LAST_BLOCK:
+				client.Send(chain->GetLastBlock()->Encode());
+				break;
+
+			case MessageType::REQ_PARTIAL_BLOCKCHAIN:
+			{
+				size_t index = (size_t)json["Index"].int_value();
+				client.Send(chain->SerializeChain(index));
+				break;
+			}
+			}
+		}
 	}
 };
 
@@ -209,4 +293,5 @@ void BlockChainServer::Stop()
 void BlockChainServer::SetWebSocket(WebSocketServer* socket)
 {
 	pimpl->webSocket = socket;
+	pimpl->webSocket->SetMessageReceived(bind(&BlockChainServerPimpl::onMessageReceived, pimpl, std::placeholders::_1, std::placeholders::_2));
 }

@@ -10,6 +10,8 @@ public:
     size_t TotalBlocks();
     bool IsBlockChainValid();
 	std::string SerializeChain();
+	std::string SerializeChain(size_t startBlock);
+	Block* GetLastBlock();
 
 private:
     Block* lastBlock;
