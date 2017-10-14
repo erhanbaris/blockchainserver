@@ -31,15 +31,14 @@ using websocketpp::lib::condition_variable;
 struct WebSocketPPClientPimpl
 {
     thread* mainThread;
-    thread* executionThread;
-    
+
     bool executionThreadRunning;
     bool isConnected = false;
     std::string address;
     
     client::connection_ptr connection;
     WebSocketPPClient* socketClient;
-    client client;
+    client* client;
     
     mutex action_lock;
     mutex connection_lock;
@@ -56,7 +55,7 @@ struct WebSocketPPClientPimpl
         
         socketClient = NULL;
         mainThread = NULL;
-        executionThread = NULL;
+        client = NULL;
     }
     
     ~WebSocketPPClientPimpl()
@@ -66,14 +65,14 @@ struct WebSocketPPClientPimpl
         action_cond.notify_one();
         
         /* Stop server accept and close port */
-        client.stop_listening();
-        client.stop();
+        client->stop_listening();
+        client->stop();
         
         /* Bye bye thread */
         delete mainThread;
     }
     
-    void onOpen(connection_hdl hdl) {
+    void onConnect(connection_hdl hdl) {
         if (onConnectCallback)
             onConnectCallback(*socketClient);
     }
@@ -96,39 +95,46 @@ struct WebSocketPPClientPimpl
     }
     
     void Start() {
-        client.run();
+        client->run();
         // executionThread = new thread(bind(&WebSocketPPClientPimpl::internalStart, this));
     }
     
 private:
-    void internalStart() {
-        while(executionThreadRunning) {
-            unique_lock<mutex> lock(action_lock);
-        }
-        
-        delete executionThread;
-    }
 };
 
+
+void WebSocketPPClient::SetClient(client* pClient)
+{
+    pimpl->client = pClient;
+    pimpl->client->clear_access_channels(websocketpp::log::alevel::all);
+    
+    pimpl->client->set_open_handler(bind(&WebSocketPPClientPimpl::onConnect, pimpl, ::_1));
+    pimpl->client->set_fail_handler(bind(&WebSocketPPClientPimpl::onClose, pimpl, ::_1));
+    pimpl->client->set_message_handler(bind(&WebSocketPPClientPimpl::onMessage, pimpl, ::_1, ::_2));
+    pimpl->client->set_close_handler(bind(&WebSocketPPClientPimpl::onClose, pimpl, ::_1));
+    
+    websocketpp::lib::error_code ec;
+    pimpl->connection = pimpl->client->get_connection(pimpl->address, ec);
+}
 
 void WebSocketPPClient::Connect(std::string& address)
 {
     pimpl->address = address;
     
-    
-    pimpl->client.clear_access_channels(websocketpp::log::alevel::all);
+    pimpl->client = new client;
+    pimpl->client->clear_access_channels(websocketpp::log::alevel::all);
     //c.set_error_channels(websocketpp::log::elevel::none);
     
-    pimpl->client.init_asio();
+    pimpl->client->init_asio();
     
-    pimpl->client.set_open_handler(bind(&WebSocketPPClientPimpl::onOpen, pimpl, ::_1));
-    pimpl->client.set_fail_handler(bind(&WebSocketPPClientPimpl::onClose, pimpl, ::_1));
-    pimpl->client.set_message_handler(bind(&WebSocketPPClientPimpl::onMessage, pimpl, ::_1, ::_2));
-    pimpl->client.set_close_handler(bind(&WebSocketPPClientPimpl::onClose, pimpl, ::_1));
+    pimpl->client->set_open_handler(bind(&WebSocketPPClientPimpl::onConnect, pimpl, ::_1));
+    pimpl->client->set_fail_handler(bind(&WebSocketPPClientPimpl::onClose, pimpl, ::_1));
+    pimpl->client->set_message_handler(bind(&WebSocketPPClientPimpl::onMessage, pimpl, ::_1, ::_2));
+    pimpl->client->set_close_handler(bind(&WebSocketPPClientPimpl::onClose, pimpl, ::_1));
     
     websocketpp::lib::error_code ec;
-    pimpl->connection = pimpl->client.get_connection(pimpl->address, ec);
-    pimpl->client.connect(pimpl->connection);
+    pimpl->connection = pimpl->client->get_connection(pimpl->address, ec);
+    pimpl->client->connect(pimpl->connection);
     
     
     pimpl->mainThread = new thread(bind(&WebSocketPPClientPimpl::Start, pimpl));
@@ -162,25 +168,25 @@ bool WebSocketPPClient::IsConnected()
 
 void WebSocketPPClient::Send(std::string& message)
 {
-    
+    pimpl->client->send(pimpl->connection, message, websocketpp::frame::opcode::text);
 }
 
-void WebSocketPPClient::setOnConnect(OnConnectCallback cb)
+void WebSocketPPClient::SetOnConnect(OnConnectCallback cb)
 {
     pimpl->onConnectCallback = cb;
 }
 
-void WebSocketPPClient::setOnMessage(OnMessageCallback cb)
+void WebSocketPPClient::SetOnMessage(OnMessageCallback cb)
 {
     pimpl->onMessageCallback = cb;
 }
 
-void WebSocketPPClient::setOnDisconnect(OnDisconnectCallback cb)
+void WebSocketPPClient::SetOnDisconnect(OnDisconnectCallback cb)
 {
     pimpl->onDisconnectCallback = cb;
 }
 
-void WebSocketPPClient::setOnClose(OnCloseCallback cb)
+void WebSocketPPClient::SetOnClose(OnCloseCallback cb)
 {
     pimpl->onCloseCallback = cb;
 }

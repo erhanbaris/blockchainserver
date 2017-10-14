@@ -16,7 +16,7 @@ public:
     void Start(size_t port);
     void Stop();
     size_t GetPort();
-	void BroadcastBlock(Block*);
+	void BroadcastMessage(std::string const&);
 	WebSocketServer::ConnectToBlockStatus ConnectToNode(std::string);
 	void DisconnectFromNode(std::string);
 	const std::vector<std::string> ConnectedNodes();

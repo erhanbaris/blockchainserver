@@ -14,13 +14,19 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-using namespace std;
+#include <TcpServer.h>
+#include <TcpServerUv.h>
 
+#include <TcpClient.h>
+#include <TcpClientUv.h>
+
+using namespace std;
 
 inline static bool isInvalidParameter(int index, int argc, char *argv[])
 {
 	return (index + 2) > argc || !isInteger(argv[index + 1]);
 }
+uv_loop_t* loop = NULL;
 
 int main(int argc, char *argv[])
 {
@@ -56,6 +62,14 @@ int main(int argc, char *argv[])
 		}
 	}
 
+    loop = uv_default_loop();
+
+    TcpClient* tcpClient = new TcpClientUv;
+    tcpClient->Connect("172.217.16.100", 80);
+
+    TcpServer* tcpServer = new TcpServerUv;
+    tcpServer->Start(8811);
+    
     INFO << "WebSocket Server Port : " << webSocketPort;
     WebSocketServer * socket = new WebSocketPPServer;
     socket->Init();

@@ -47,8 +47,8 @@ namespace
 	{
 		Block* newBlock = new Block;
 		newBlock->Hash = json["Hash"].string_value();
-		newBlock->Index = json["Index"].int_value();
-		newBlock->Nonce = json["Nonce"].int_value();
+		newBlock->Index = (size_t) json["Index"].int_value();
+		newBlock->Nonce = (size_t) json["Nonce"].int_value();
 		newBlock->TimeStamp = json["TimeStamp"].int_value();
 		newBlock->PreviousHash = json["PreviousHash"].string_value();
 		auto data = json["Data"].string_value();

@@ -18,6 +18,9 @@
 #define INFO std::cout << std::endl
 #define ERROR std::cout << std::endl
 
+#include <uv.h>
+
+extern uv_loop_t* loop;
 
 struct Block;
 enum class MessageType
@@ -25,10 +28,14 @@ enum class MessageType
 	REQ_LAST_BLOCK = 0,
 	REQ_FULL_BLOCKCHAIN = 1,
 	REQ_PARTIAL_BLOCKCHAIN = 2,
+	REQ_NODE_LIST = 6,
 
 	RES_LAST_BLOCK = 3,
 	RES_FULL_BLOCKCHAIN = 4,
-	RES_PARTIAL_BLOCKCHAIN = 5
+	RES_PARTIAL_BLOCKCHAIN = 5,
+	RES_NODE_LIST = 7,
+
+    RES_INFO = 8
 };
 
 /*struct NodeMessage {
