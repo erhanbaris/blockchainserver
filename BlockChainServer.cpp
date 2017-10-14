@@ -18,14 +18,18 @@ namespace
 	static http_parser_settings * parser_settings;
 }
 
+enum class ConnectToBlockStatus { ADDED = 0, ALREADY_ADDED = 1 };
+
 /* BLOCK CHAIN SERVER PIMPL*/
 struct BlockChainServerPimpl
 {
-	WebSocketServer* webSocket;
+	TcpServer* tcpSocket;
 	BlockChainServer* server; // server
 	uv_tcp_t* tcpServer;
 	uv_timer_t elapsedTimer;
 	BlockChain* chain;
+
+    std::vector<TcpClient*> connectedNodes;
 
 	BlockChainServerPimpl(BlockChainServer * pServer)
 	{
@@ -34,7 +38,7 @@ struct BlockChainServerPimpl
 		tcpServer = new uv_tcp_t;
 		tcpServer->data = this;
 		chain = new BlockChain();
-		webSocket = NULL;
+		tcpSocket = NULL;
 	}
 
 	~BlockChainServerPimpl()
@@ -120,8 +124,8 @@ struct BlockChainServerPimpl
         {
             client->ResponseBuffer << "{\"Status\":true,\"Block\":" << block->Encode() << "\"}";
             
-            if (webSocket != NULL)
-                webSocket->BroadcastMessage("{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::RES_LAST_BLOCK) + ",\"Block\":" + block->Encode() + "}");
+            if (tcpSocket != NULL)
+				tcpSocket->BroadcastMessage("{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::RES_LAST_BLOCK) + ",\"Block\":" + block->Encode() + "}");
         }
 		else
 			client->ResponseBuffer << "{\"Status\":false,\"Message\":\"Block not added.\"}";
@@ -129,16 +133,29 @@ struct BlockChainServerPimpl
 
 	void addNodeCall(HttpClient* client)
 	{
-		auto status = client->ServerPimpl->webSocket->ConnectToNode(client->RequestBuffer.c_str());
-		if (status == WebSocketServer::ConnectToBlockStatus::ADDED)
-			client->ResponseBuffer << "{\"Status\":true}";
-		else
-			client->ResponseBuffer << "{\"Status\":false,\"Message\":\"Node already added.\"}";
+        std::stringstream ss(client->RequestBuffer.c_str());
+        std::string item;
+        std::vector<std::string> tokens;
+        while (std::getline(ss, item, ':'))
+            tokens.push_back(item);
+        
+        if (tokens.size() == 2)
+        {
+            auto status = client->ServerPimpl->ConnectToNode(tokens[0], (size_t) stoi(tokens[1]));
+            if (status == ConnectToBlockStatus::ADDED)
+                client->ResponseBuffer << "{\"Status\":true}";
+            else
+                client->ResponseBuffer << "{\"Status\":false,\"Message\":\"Node already added.\"}";
+        }
+        else
+            client->ResponseBuffer << "{\"Status\":false,\"Message\":\"Node connection info not valid.\"}";
+        
+
 	}
 
 	void nodeListCall(HttpClient* client)
 	{
-		auto nodes = client->ServerPimpl->webSocket->ConnectedNodes();
+		auto nodes = client->ServerPimpl->ConnectedNodes();
 		auto nodesEnd = nodes.end();
 		auto it = nodes.begin();
 
@@ -161,6 +178,49 @@ struct BlockChainServerPimpl
 		client->ResponseBuffer << "{\"Status\":true,\"TotalBlock\":" << std::to_string(chain->TotalBlocks()) << "}";
 	}
 
+    void messageReceivedFromNode(std::string const& message, TcpClient& client)
+    {
+        INFO << "Message received from node : " << message << std::endl;
+    }
+    
+    void connectedToNewNode(TcpClient& client)
+    {
+        INFO << "Connected to remote server." << std::endl;
+        client.Send("{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::REQ_FULL_BLOCKCHAIN) +"}");
+    }
+    
+    ConnectToBlockStatus ConnectToNode(std::string address, size_t port)
+    {
+        auto end = connectedNodes.end();
+        for (auto it = connectedNodes.begin(); it != end; ++it)
+            if ((*it)->GetRemoteAddress() == address && (*it)->GetRemotePort() == port)
+                return ConnectToBlockStatus::ALREADY_ADDED;
+
+        TcpClient *client = tcpSocket->CreateClient();
+
+        client->SetOnConnect(std::bind(&BlockChainServerPimpl::connectedToNewNode, this, std::placeholders::_1));
+        client->SetOnMessage(std::bind(&BlockChainServerPimpl::onMessageReceived, this, std::placeholders::_1, std::placeholders::_2));
+
+        client->Connect(address, port);
+        connectedNodes.push_back(client);
+        
+        return ConnectToBlockStatus::ADDED;
+    }
+
+    void DisconnectFromNode(std::string address)
+    {
+        auto end = connectedNodes.end();
+        for(auto it = connectedNodes.begin(); it != end; ++it)
+            if ((*it)->GetRemoteAddress() == address)
+                (*it)->Disconnect();
+    }
+
+    const std::vector<std::string> ConnectedNodes()
+    {
+        std::vector<std::string> nodes;
+        return nodes;
+    }
+
 	static int on_message_complete(http_parser* parser) {
 		HttpClient* client = (HttpClient*)parser->data;
 
@@ -175,10 +235,10 @@ struct BlockChainServerPimpl
 		else if (client->Url == "/nodes")
 			client->ServerPimpl->nodeListCall(client);
 		else if (client->Url == "/removenode")
-			client->ServerPimpl->webSocket->DisconnectFromNode(client->RequestBuffer.c_str());
+			client->ServerPimpl->DisconnectFromNode(client->RequestBuffer.c_str());
 		else if (client->Url == "/testclient")
 		{
-			client->RequestBuffer = "ws://127.0.0.1:" + std::to_string(client->ServerPimpl->webSocket->GetPort());
+			client->RequestBuffer = "ws://127.0.0.1:" + std::to_string(client->ServerPimpl->tcpSocket->GetPort());
 			client->ServerPimpl->addNodeCall(client);
 		}
 		else
@@ -207,9 +267,14 @@ struct BlockChainServerPimpl
 
 		uv_read_start((uv_stream_t*)client->Handle, alloc_cb, on_read);
 	}
+    
+    void onClientConnected(TcpClient& tcpClient)
+    {
+        
+    }
 
 	/* Block information received from remote node*/
-	void onMessageReceived(std::string const& message, WebSocketClient& webSocketClient)
+	void onMessageReceived(std::string const& message, TcpClient& tcpClient)
 	{
 		std::string err;
 		const json11::Json json = json11::Json::parse(message, err);
@@ -226,34 +291,47 @@ struct BlockChainServerPimpl
                     break;
                 }
 
-                case MessageType::RES_PARTIAL_BLOCKCHAIN:
                 case MessageType::RES_FULL_BLOCKCHAIN:
                 {
                     size_t totalBlocks = 0;
-                    Block* block = NULL;
-                    Block::Decode(json["Block"], block, &totalBlocks);
+                    std::vector<Block*> blocks;
+                    Block::Decode(json["Blocks"], blocks);
+                    
+                    chain->SetChain(blocks);
                     break;
                 }
 
                 case MessageType::REQ_FULL_BLOCKCHAIN:
                 {
-                    std::string responseMessage = chain->SerializeChain();
-                    webSocketClient.Send(responseMessage);
+                    std::stringstream responseBuffer;
+                    responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::RES_FULL_BLOCKCHAIN << ",\"Blocks\":";
+                    responseBuffer << chain->SerializeChain();
+                    responseBuffer << "}";
+
+                    tcpClient.Send(responseBuffer.str());
                     break;
                 }
 
                 case MessageType::REQ_LAST_BLOCK:
                 {
-                    std::string responseMessage = chain->GetLastBlock()->Encode();
-                    webSocketClient.Send(responseMessage);
+                    std::stringstream responseBuffer;
+                    responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::RES_LAST_BLOCK << ",\"Block\":";
+                    responseBuffer << chain->GetLastBlock()->Encode();
+                    responseBuffer << "}";
+
+                    tcpClient.Send(responseBuffer.str());
                     break;
                 }
 
                 case MessageType::REQ_PARTIAL_BLOCKCHAIN:
                 {
                     size_t index = (size_t)json["Index"].int_value();
-                    std::string responseMessage = chain->SerializeChain(index);
-                    webSocketClient.Send(responseMessage);
+                    std::stringstream responseBuffer;
+                    responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::RES_PARTIAL_BLOCKCHAIN << ",\"Blocks\":";
+                    responseBuffer << chain->SerializeChain(index);
+                    responseBuffer << "}";
+
+                    tcpClient.Send(responseBuffer.str());
                     break;
                 }
                     
@@ -263,14 +341,23 @@ struct BlockChainServerPimpl
                     auto nodesEnd = nodes.end();
                     
                     for (auto it = nodes.begin(); it != nodesEnd; ++it)
-                        webSocket->ConnectToNode(it->string_value());
+                    {
+                        std::stringstream ss(it->string_value());
+                        std::string item;
+                        std::vector<std::string> tokens;
+                        while (std::getline(ss, item, ':'))
+                            tokens.push_back(item);
+
+                        if (tokens.size() == 2)
+                            ConnectToNode(tokens[0], (size_t) stoi(tokens[1]));
+                    }
                     
                     break;
                 }
 
                 case MessageType::REQ_NODE_LIST:
                 {
-                    auto nodes = webSocket->ConnectedNodes();
+                    auto nodes = ConnectedNodes();
                     auto nodesEnd = nodes.end();
                     auto it = nodes.begin();
 
@@ -288,11 +375,13 @@ struct BlockChainServerPimpl
 
                     responseBuffer << "]}";
 
-                    std::string message = responseBuffer.str();
-                    webSocketClient.Send(message);
+                    tcpClient.Send(responseBuffer.str());
                     break;
                 }
-			}
+
+                case MessageType::RES_INFO:
+                    break;
+            }
 		}
 	}
 };
@@ -334,8 +423,9 @@ void BlockChainServer::Stop()
 
 }
 
-void BlockChainServer::SetWebSocket(WebSocketServer* socket)
+void BlockChainServer::SetTcpServer(TcpServer* server)
 {
-	pimpl->webSocket = socket;
-	pimpl->webSocket->SetMessageReceived(bind(&BlockChainServerPimpl::onMessageReceived, pimpl, std::placeholders::_1, std::placeholders::_2));
+	pimpl->tcpSocket = server;
+	pimpl->tcpSocket->SetMessageReceived(std::bind(&BlockChainServerPimpl::onMessageReceived, pimpl, std::placeholders::_1, std::placeholders::_2));
+    pimpl->tcpSocket->SetClientConnected(std::bind(&BlockChainServerPimpl::onClientConnected, pimpl, std::placeholders::_1));
 }

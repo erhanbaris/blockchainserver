@@ -18,11 +18,11 @@ public:
     void Stop();
     size_t GetPort();
     void BroadcastMessage(std::string const&);
-    TcpServer::ConnectToBlockStatus ConnectToNode(std::string);
-    void DisconnectFromNode(std::string);
-    const std::vector<std::string> ConnectedNodes();
-    void SetMessageReceived(MessageReceivedCallback cb);
-
+    TcpClient* CreateClient();
+    
+    void SetMessageReceived(MessageReceivedCallback);
+    void SetClientConnected(ClientConnectedCallback);
+    
 private:
     TcpServerUvPimpl *pimpl;
 };

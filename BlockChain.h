@@ -12,6 +12,7 @@ public:
 	std::string SerializeChain();
 	std::string SerializeChain(size_t startBlock);
 	Block* GetLastBlock();
+    void SetChain(std::vector<Block*>&);
 
 private:
     Block* lastBlock;

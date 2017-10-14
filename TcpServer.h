@@ -7,31 +7,20 @@
 
 namespace blockchain {
     namespace tcp {
-        typedef std::function<void(std::string const &, TcpClient &)> MessageReceivedCallback;
-        typedef std::function<void(TcpClient &)> ClientConnectedCallback;
 
         class TcpServer {
         public:
-
-            enum class ConnectToBlockStatus {
-                ADDED = 0, ALREADY_ADDED = 1
-            };
+            typedef std::function<void(std::string const &, TcpClient &)> MessageReceivedCallback;
+            typedef std::function<void(TcpClient &)> ClientConnectedCallback;
 
             virtual void Start(size_t port) = 0;
-
             virtual void Stop() = 0;
-
             virtual size_t GetPort() = 0;
-
             virtual void BroadcastMessage(std::string const &) = 0;
-
-            virtual ConnectToBlockStatus ConnectToNode(std::string) = 0;
-
-            virtual void DisconnectFromNode(std::string) = 0;
-
-            virtual const std::vector<std::string> ConnectedNodes() = 0;
-
-            virtual void SetMessageReceived(MessageReceivedCallback cb) = 0;
+            virtual TcpClient* CreateClient() = 0;
+            
+            virtual void SetMessageReceived(MessageReceivedCallback) = 0;
+            virtual void SetClientConnected(ClientConnectedCallback) = 0;
         };
     }
 }

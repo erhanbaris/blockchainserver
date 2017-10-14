@@ -60,12 +60,12 @@ namespace
 	}
 }
 
-void Block::Decode(json11::Json const& json, Block* newBlock)
+void Block::Decode(json11::Json const& json, Block*& newBlock)
 {
 	newBlock = fetchBlocksFromJson(json);
 }
 
-void Block::Decode(std::string const& message, Block* newBlock)
+void Block::Decode(std::string const& message, Block*& newBlock)
 {
 	std::string err;
 	const json11::Json json = json11::Json::parse(message, err);
@@ -76,33 +76,35 @@ void Block::Decode(std::string const& message, Block* newBlock)
 		newBlock = NULL;
 }
 
-void Block::Decode(json11::Json const& json, Block* newBlock, size_t * totalBlocks)
+void Block::Decode(json11::Json const& json, std::vector<Block*>& blocks)
 {
 	if (json.is_array())
 	{
+        Block* newBlock = NULL;
 		auto jsonArray = json.array_items();
 		auto end = jsonArray.end();
 		for (auto it = jsonArray.begin(); it != end; ++it)
 		{
 			auto block = fetchBlocksFromJson(*it);
+            blocks.push_back(block);
+            
 			block->PreviousBlock = newBlock;
 			newBlock = block;
 		}
-
-		(*totalBlocks) = jsonArray.size();
 	}
 	else
 	{
-		newBlock = fetchBlocksFromJson(json);
-		(*totalBlocks) = 1;
+		Block* newBlock = fetchBlocksFromJson(json);
+        blocks.push_back(newBlock);
+
 	}
 }
 
-void Block::Decode(std::string const& message, Block* newBlock, size_t * totalBlocks)
+void Block::Decode(std::string const& message, std::vector<Block*>& blocks)
 {
 	std::string err;
 	const json11::Json json = json11::Json::parse(message, err);
 
 	if (err.empty())
-		Block::Decode(json, newBlock, totalBlocks);
+		Block::Decode(json, blocks);
 }

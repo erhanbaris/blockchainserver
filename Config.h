@@ -3,7 +3,7 @@
 #include <string>
 
 #define HTTP_SERVER_PORT 4444
-#define WEBSOCKET_SERVER_PORT 4445
+#define TCP_SERVER_PORT 4445
 
 #ifdef MINING_ACTIVE
 	#define DIFFICULTY 4	
