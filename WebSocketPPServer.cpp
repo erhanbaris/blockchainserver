@@ -109,6 +109,10 @@ struct WebSocketPPServerPimpl
 			actions.push(action(SUBSCRIBE, hdl));
 		}
 		action_cond.notify_one();
+		INFO << "Node connected to server." << std::endl;
+
+		server::connection_ptr con = server.get_con_from_hdl(hdl);
+		INFO << con.get()->get_remote_endpoint() << std::endl;
 	}
 
 	void onClose(connection_hdl hdl) {
@@ -121,11 +125,25 @@ struct WebSocketPPServerPimpl
 
 	void onMessage(connection_hdl hdl, server::message_ptr msg)
 	{
-		{
-			lock_guard<mutex> guard(action_lock);
-			actions.push(action(MESSAGE, hdl, msg));
-		}
-		action_cond.notify_one();
+        std::string message;
+        if (msg->get_opcode() == websocketpp::frame::opcode::text) {
+            message = msg->get_payload();
+        } else {
+            message = websocketpp::utility::to_hex(msg->get_payload());
+        }
+
+        INFO << "--------" << std::endl;
+        INFO << message << std::endl;
+
+
+		std::cout << "on_message called with hdl: " << hdl.lock().get()
+				  << " and message (" << msg->get_payload().size() << "): " << msg->get_payload()
+				  << std::endl;
+
+        WebSocketPPClient* tmp = new WebSocketPPClient;
+
+        if (onMessageReceivedCallback)
+            onMessageReceivedCallback(message, *tmp);
 	}
 
 	void Start() {
@@ -147,6 +165,14 @@ struct WebSocketPPServerPimpl
 		if (onMessageReceivedCallback)
 			onMessageReceivedCallback(message, client);
 	}
+
+    void onConnect(WebSocketClient& client)
+    {
+        std::string message = "{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::REQ_LAST_BLOCK) + "}";
+        client.Send(message);
+        //pimpl->actions.push(action(MESSAGE, "{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::RES_LAST_BLOCK) + ",\"Block\":" + block->Encode() + "}"));
+        INFO << "CONNECTEDDDDDDDDD";
+    }
 
 	void onClientConnect(WebSocketClient& client)
 	{
@@ -178,13 +204,17 @@ private:
 			else if (a.type == MESSAGE) {
 				lock_guard<mutex> guard(connection_lock);
 
-				con_list::iterator it;
 				auto end = connections.end();
-				for (it = connections.begin(); it != end; ++it) {
+				for (con_list::iterator it = connections.begin(); it != end; ++it) {
 					websocketpp::lib::error_code ec;
 					server.get_alog().write(websocketpp::log::alevel::app, a.str);
 					server.send(*it, a.str, websocketpp::frame::opcode::text, ec);
 				}
+
+                auto nodesEnd = remoteNodeConnections.end();
+                for (auto it = remoteNodeConnections.begin(); it != nodesEnd; ++it) {
+                    (*it)->Send(a.str);
+                }
 			}
 			else {
 			}
@@ -193,6 +223,7 @@ private:
 		delete executionThread;
 	}
 };
+
 
 void WebSocketPPServer::Start(size_t port) {
 	pimpl->port = port;
@@ -219,13 +250,13 @@ void WebSocketPPServer::Init() {
 	pimpl->server.set_message_handler(bind(&WebSocketPPServerPimpl::onMessage, pimpl, ::_1, ::_2));
 }
 
-void WebSocketPPServer::BroadcastBlock(Block*block)
+void WebSocketPPServer::BroadcastMessage(std::string const& message)
 {
-	if (block != NULL)
+	if (!message.empty())
 	{
 		{
 			lock_guard<mutex> guard(pimpl->action_lock);
-			pimpl->actions.push(action(MESSAGE, block->Encode()));
+            pimpl->actions.push(action(MESSAGE, message));
 		}
 
 		pimpl->action_cond.notify_one();
@@ -243,7 +274,8 @@ WebSocketServer::ConnectToBlockStatus WebSocketPPServer::ConnectToNode(std::stri
 			return WebSocketServer::ConnectToBlockStatus::ALREADY_ADDED;
 
 	WebSocketClient *webClient = new WebSocketPPClient;
-	webClient->setOnMessage(std::bind(&WebSocketPPServerPimpl::onClientMessage, pimpl, std::placeholders::_1, std::placeholders::_2));
+    webClient->SetOnMessage(std::bind(&WebSocketPPServerPimpl::onClientMessage, pimpl, std::placeholders::_1, std::placeholders::_2));
+    webClient->SetOnConnect(std::bind(&WebSocketPPServerPimpl::onConnect, pimpl, std::placeholders::_1));
 	// webClient->setOnConnect(onConnect);
 	webClient->Connect(address);
 	pimpl->remoteNodeConnections.push_back(webClient);
@@ -255,7 +287,6 @@ void WebSocketPPServer::SetMessageReceived(OnMessageReceivedCallback cb)
 {
 	pimpl->onMessageReceivedCallback = cb;
 }
-
 
 void WebSocketPPServer::DisconnectFromNode(std::string)
 {

@@ -14,17 +14,23 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-using namespace std;
+#include <TcpServer.h>
+#include <TcpServerUv.h>
 
+#include <TcpClient.h>
+#include <TcpClientUv.h>
+
+using namespace std;
 
 inline static bool isInvalidParameter(int index, int argc, char *argv[])
 {
 	return (index + 2) > argc || !isInteger(argv[index + 1]);
 }
+uv_loop_t* loop = NULL;
 
 int main(int argc, char *argv[])
 {
-	size_t webSocketPort = WEBSOCKET_SERVER_PORT;
+	size_t webSocketPort = TCP_SERVER_PORT;
 	size_t httpPort = HTTP_SERVER_PORT;
 
 	for (size_t i = 0; i < argc; ++i)
@@ -38,11 +44,11 @@ int main(int argc, char *argv[])
 			}
 			httpPort = stoi(argv[i + 1]);
 		}
-		else if (strcmp(argv[i], "--websocket-port") == 0)
+		else if (strcmp(argv[i], "--tcp-port") == 0)
 		{
 			if (isInvalidParameter(i, argc, argv))
 			{
-				ERROR << "WebSocket server port is invalid.";
+				ERROR << "Tcp server port is invalid.";
 				return 1;
 			}
 			webSocketPort = stoi(argv[i + 1]);
@@ -50,20 +56,20 @@ int main(int argc, char *argv[])
 		else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
 		{
 			ERROR << " Blockchain Server setting parameters." << std::endl;
-			ERROR << "  --http-port       Http server port. Default port is " << HTTP_SERVER_PORT;
-			ERROR << "  --websocket-port  Websocket server port. Default port is " << WEBSOCKET_SERVER_PORT << std::endl;
+			ERROR << "  --http-port       Http server port. Default port: " << HTTP_SERVER_PORT;
+			ERROR << "  --tcp-port  Tcp server port. Default port: " << TCP_SERVER_PORT << std::endl;
 			return 0;
 		}
 	}
 
-    INFO << "WebSocket Server Port : " << webSocketPort;
-    WebSocketServer * socket = new WebSocketPPServer;
-    socket->Init();
-    socket->Start(webSocketPort);
+    loop = uv_default_loop();
+
+    TcpServer* tcpServer = new TcpServerUv;
+    tcpServer->Start(webSocketPort);
 
     INFO << "Http Server Port : " << httpPort;
     BlockChainServer server;
-	server.SetWebSocket(socket);
+	server.SetTcpServer(tcpServer);
     server.Start(httpPort);
 
 

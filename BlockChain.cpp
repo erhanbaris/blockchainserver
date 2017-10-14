@@ -39,6 +39,25 @@ Block* BlockChain::NewBlock(char const * data)
 	return block;
 }
 
+void BlockChain::SetChain(std::vector<Block*>& newBlocks)
+{
+    auto blocksEnd = blocks.end();
+    for(auto it = blocks.begin(); it != blocksEnd; ++it)
+        delete *it;
+    
+    blocks.clear();
+    
+    // Resize for blocks
+    auto blocksBegin = blocks.begin();
+    blocksEnd = newBlocks.end();
+    
+    for (auto it = newBlocks.begin(); it != blocksEnd; ++it) {
+        blocks.push_back(*it);
+    }
+    
+    totalBlocks = blocks.size();
+}
+
 size_t BlockChain::TotalBlocks()
 {
 	return totalBlocks;

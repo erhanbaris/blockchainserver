@@ -17,8 +17,8 @@ public:
     virtual void Send(std::string&) = 0;
     virtual std::string GetRemoteAddress() = 0;
 
-    virtual void setOnMessage(OnMessageCallback) = 0;
-    virtual void setOnDisconnect(OnDisconnectCallback) = 0;
-    virtual void setOnConnect(OnConnectCallback) = 0;
-    virtual void setOnClose(OnCloseCallback) = 0;
+    virtual void SetOnMessage(OnMessageCallback) = 0;
+    virtual void SetOnDisconnect(OnDisconnectCallback) = 0;
+    virtual void SetOnConnect(OnConnectCallback) = 0;
+    virtual void SetOnClose(OnCloseCallback) = 0;
 };

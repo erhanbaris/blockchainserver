@@ -21,9 +21,9 @@ struct Block
 	MineInfo CalculateHash();
 	std::string Encode();
 	
-	static void Decode(std::string const& message, Block* newBlock);
-	static void Decode(std::string const& message, Block* newBlock, size_t * totalBlocks); 
+	static void Decode(std::string const& message, Block*& newBlock);
+	static void Decode(std::string const& message, std::vector<Block*>& blocks);
 
-	static void Decode(json11::Json const& json, Block* newBlock); 
-	static void Decode(json11::Json const& json, Block* newBlock, size_t * totalBlocks);
+	static void Decode(json11::Json const& json, Block*& newBlock);
+	static void Decode(json11::Json const& json, std::vector<Block*>& blocks);
 };

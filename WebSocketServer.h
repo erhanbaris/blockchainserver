@@ -18,7 +18,7 @@ public:
     virtual void Stop() = 0;
     virtual size_t GetPort() = 0;
 
-	virtual void BroadcastBlock(Block*) = 0;
+	virtual void BroadcastMessage(std::string const&) = 0;
 	virtual ConnectToBlockStatus ConnectToNode(std::string) = 0;
 	virtual void DisconnectFromNode(std::string) = 0;
 	virtual const std::vector<std::string> ConnectedNodes() = 0;

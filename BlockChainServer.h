@@ -4,7 +4,8 @@
 #include <vector>
 
 #include <sha256.h>
-#include <WebSocketServer.h>
+#include <TcpServer.h>
+using namespace blockchain::tcp;
 
 struct BlockChainServerPimpl;
 class BlockChainServer
@@ -15,7 +16,7 @@ class BlockChainServer
 
         void Start(size_t port);
         void Stop();
-		void SetWebSocket(WebSocketServer*);
+		void SetTcpServer(TcpServer*);
 
     private:
         BlockChainServerPimpl* pimpl;
