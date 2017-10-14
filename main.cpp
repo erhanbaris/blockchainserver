@@ -1,12 +1,7 @@
-#define ASIO_STANDALONE
-#define _WEBSOCKETPP_CPP11_TYPE_TRAITS_
-
 #include <iostream>
 
 #include <Config.h>
 #include <blockchainserver.h>
-#include <WebSocketServer.h>
-#include <WebSocketPPServer.h>
 #include <string>
 #include <sstream>
 #include <Tools.h>

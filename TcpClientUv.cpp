@@ -1,5 +1,3 @@
-#define ASIO_STANDALONE
-
 #include <TcpClient.h>
 #include <TcpClientUv.h>
 
