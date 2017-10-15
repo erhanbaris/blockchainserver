@@ -6,7 +6,6 @@
 Block::Block()
 {
 	PreviousHash = "0";
-	PreviousBlock = NULL;
 }
 
 void Block::SetHash()
@@ -88,7 +87,6 @@ void Block::Decode(json11::Json const& json, std::vector<Block*>& blocks)
 			auto block = fetchBlocksFromJson(*it);
             blocks.push_back(block);
             
-			block->PreviousBlock = newBlock;
 			newBlock = block;
 		}
 	}

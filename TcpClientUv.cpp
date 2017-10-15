@@ -5,6 +5,10 @@
 
 #include <stdlib.h>
 #include <thread>
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include <sstream>
 
 using namespace std;
 using namespace blockchain::tcp;
@@ -17,6 +21,8 @@ struct TcpClientUvPimpl
     size_t port;
     bool isConnected;
     std::string sendMessage;
+    bool largeBufferStarted;
+    std::stringstream tmpBuffer;
 
     TcpClient *tcpClient;
     AsyncType asyncType;
@@ -65,21 +71,33 @@ struct TcpClientUvPimpl
     static void allocCb(uv_handle_t* handle, size_t size, uv_buf_t* buf) {
         *buf = uv_buf_init((char*)malloc(size), size);
     }
-
+    
     static void readCb(uv_stream_t* tcp, ssize_t nread, const uv_buf_t* buf)
     {
         TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)tcp->data;
+        
+        INFO << "nread :" << nread << std::endl;
 
         if(nread >= 0) {
-            if (pimpl->messageCallback)
+            pimpl->tmpBuffer << buf->base;
+
+            if ((size_t)nread == buf->len && 65536 == nread)
+                pimpl->largeBufferStarted = true;
+               
+            else if (pimpl->largeBufferStarted && (size_t)nread != buf->len)
+                pimpl->largeBufferStarted = false;
+            
+            if (!pimpl->largeBufferStarted && pimpl->messageCallback)
             {
-                std::string message(buf->base, nread);
-                pimpl->messageCallback(message, *pimpl->tcpClient);
+                pimpl->messageCallback(pimpl->tmpBuffer.str(), *pimpl->tcpClient);
+                pimpl->tmpBuffer.str(std::string());
             }
         }
         else {
             uv_close((uv_handle_t*)tcp, closeCb);
         }
+        
+        free(buf->base);
     }
 
     static void afterSend(uv_write_t* handle, int status) {
@@ -92,10 +110,12 @@ struct TcpClientUvPimpl
         TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)handle->data;
 
         if (pimpl->asyncType == AsyncType::SEND) {
+            //pimpl->sendMessage.append("\n");
+            
             uv_buf_t resbuf;
             resbuf.base = const_cast<char *>(pimpl->sendMessage.c_str());
             resbuf.len = pimpl->sendMessage.size();
-
+            
             uv_write_t *write_req = new uv_write_t;
             write_req->data = pimpl;
             uv_write(write_req, (uv_stream_t *) pimpl->client, &resbuf, 1, afterSend);

@@ -10,7 +10,6 @@ struct Block
 {
 	std::size_t Index;
 	std::string Hash;
-	Block* PreviousBlock;
 	std::string PreviousHash;
 	long int TimeStamp;
 	std::size_t Nonce;

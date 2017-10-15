@@ -49,7 +49,7 @@ static MineInfo MineHash(size_t index, std::string & data)
 	return result;
 }
 
-inline static bool isInteger(char *str)
+inline static bool isInteger(char const* str)
 {
 	return strlen(str) != 0 && strspn(str, "0123456789") == strlen(str);
 }

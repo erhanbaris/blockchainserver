@@ -21,28 +21,3 @@
 #include <uv.h>
 
 extern uv_loop_t* loop;
-
-struct Block;
-enum class MessageType
-{
-	REQ_LAST_BLOCK = 0,
-	REQ_FULL_BLOCKCHAIN = 1,
-	REQ_PARTIAL_BLOCKCHAIN = 2,
-	REQ_NODE_LIST = 6,
-
-	RES_LAST_BLOCK = 3,
-	RES_FULL_BLOCKCHAIN = 4,
-	RES_PARTIAL_BLOCKCHAIN = 5,
-	RES_NODE_LIST = 7,
-
-    RES_INFO = 8
-};
-
-/*struct NodeMessage {
-	MessageType Type; 
-	union Data {
-		struct Block* Block;
-		std::vector<struct Block*>* Blocks;
-		size_t StartIndex;
-	};
-};*/
