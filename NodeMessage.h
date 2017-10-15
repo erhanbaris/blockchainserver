@@ -17,7 +17,8 @@ enum class MessageType
     RES_PARTIAL_BLOCKCHAIN = 5,
     RES_NODE_LIST = 7,
 
-    RES_INFO = 8,
+    REQ_NODE_INFO = 10,
+    RES_NODE_INFO = 8,
 
     INVALID_MESSAGE = 9
 };

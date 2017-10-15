@@ -91,6 +91,14 @@ void TcpServerUv::BroadcastMessage(std::string const& message)
         (*it)->Send(std::move(message));
 }
 
+void TcpServerUv::BroadcastMessageExpect(std::string const &message, TcpClient& tcpClient)
+{
+    auto end = pimpl->clients.end();
+    for(auto it = pimpl->clients.begin(); it != end; ++it)
+        if (tcpClient.GetRemotePort() != (*it)->GetRemotePort() && tcpClient.GetRemoteAddress() != (*it)->GetRemoteAddress())
+            (*it)->Send(std::move(message));
+}
+
 
 
 void TcpServerUv::SetMessageReceived(MessageReceivedCallback cb)

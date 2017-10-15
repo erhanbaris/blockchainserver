@@ -39,9 +39,6 @@ NodeMessage::NodeMessage(std::string const& message)
                 Index = (size_t) json["Index"].int_value();
                 break;
 
-            case MessageType::REQ_NODE_LIST:
-                break;
-
             case MessageType::RES_NODE_LIST:
             {
                 std::vector<json11::Json> nodesJson = json["Nodes"].array_items();
@@ -54,13 +51,26 @@ NodeMessage::NodeMessage(std::string const& message)
                 break;
             }
 
-            case MessageType::RES_INFO:
+            case MessageType::REQ_NODE_LIST:
+                break;
+                
+            case MessageType::RES_NODE_INFO:
+                break;
+                
+            case MessageType::REQ_NODE_INFO:
                 break;
         }
     }
+    else
+        Type = MessageType::INVALID_MESSAGE;
 }
 
 NodeMessage::~NodeMessage()
 {
-
+    if (Type == MessageType::RES_FULL_BLOCKCHAIN ||
+        Type == MessageType::RES_PARTIAL_BLOCKCHAIN)
+        delete Blocks;
+    
+    if (Type == MessageType::RES_NODE_LIST)
+        delete Nodes;
 }

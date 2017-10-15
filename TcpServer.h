@@ -17,6 +17,7 @@ namespace blockchain {
             virtual void Stop() = 0;
             virtual size_t GetPort() = 0;
             virtual void BroadcastMessage(std::string const &) = 0;
+            virtual void BroadcastMessageExpect(std::string const &, TcpClient&) = 0;
             virtual TcpClient* CreateClient() = 0;
             
             virtual void SetMessageReceived(MessageReceivedCallback) = 0;

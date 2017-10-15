@@ -18,6 +18,7 @@ public:
     void Stop();
     size_t GetPort();
     void BroadcastMessage(std::string const&);
+    void BroadcastMessageExpect(std::string const &, TcpClient&);
     TcpClient* CreateClient();
     
     void SetMessageReceived(MessageReceivedCallback);

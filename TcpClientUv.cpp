@@ -75,11 +75,10 @@ struct TcpClientUvPimpl
     static void readCb(uv_stream_t* tcp, ssize_t nread, const uv_buf_t* buf)
     {
         TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)tcp->data;
-        
-        INFO << "nread :" << nread << std::endl;
 
         if(nread >= 0) {
-            pimpl->tmpBuffer << buf->base;
+            char* tmpData = strndup(buf->base, nread);
+            pimpl->tmpBuffer << tmpData;
 
             if ((size_t)nread == buf->len && 65536 == nread)
                 pimpl->largeBufferStarted = true;
@@ -89,9 +88,12 @@ struct TcpClientUvPimpl
             
             if (!pimpl->largeBufferStarted && pimpl->messageCallback)
             {
-                pimpl->messageCallback(pimpl->tmpBuffer.str(), *pimpl->tcpClient);
+                auto message = pimpl->tmpBuffer.str();
+                pimpl->messageCallback(message, *pimpl->tcpClient);
                 pimpl->tmpBuffer.str(std::string());
             }
+
+            delete tmpData;
         }
         else {
             uv_close((uv_handle_t*)tcp, closeCb);
@@ -111,7 +113,7 @@ struct TcpClientUvPimpl
 
         if (pimpl->asyncType == AsyncType::SEND) {
             //pimpl->sendMessage.append("\n");
-            
+
             uv_buf_t resbuf;
             resbuf.base = const_cast<char *>(pimpl->sendMessage.c_str());
             resbuf.len = pimpl->sendMessage.size();

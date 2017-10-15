@@ -8,8 +8,8 @@ BlockChain::BlockChain()
     Block* genesisBlock = new Block;
     genesisBlock->Index = 1;
     genesisBlock->Nonce = 1;
-    genesisBlock->PreviousHash = "0";
-    genesisBlock->TimeStamp = getTimestamp();
+    genesisBlock->PreviousHash = "8bb60170a7a13686c3c651dac9038ce96eed1ff208cd5e29b4b16bbfec5c9c20";
+    genesisBlock->TimeStamp = 1508090809;
     genesisBlock->Data = "Genesis block";
     genesisBlock->SetHash();
     
@@ -53,7 +53,6 @@ bool BlockChain::SetChain(std::vector<Block*>& newBlocks)
     
     blocks.clear();
     
-    // Resize for blocks
     auto blocksBegin = blocks.begin();
     blocksEnd = newBlocks.end();
     
@@ -74,6 +73,30 @@ bool BlockChain::SetChain(std::vector<Block*>& newBlocks)
     for (auto it = newBlocks.begin(); it != blocksEnd; ++it)
         blocks.push_back(*it);
     
+    totalBlocks = blocks.size();
+    return true;
+}
+
+bool BlockChain::Merge(std::vector<Block*>& newBlocks)
+{
+    Block* previousBlock = GetLastBlock();
+    auto blocksEnd = newBlocks.end();
+    
+    for (auto it = newBlocks.begin(); it != blocksEnd; ++it)
+    {
+        if (!isValidNewBlock((*it), previousBlock))
+        {
+            INFO << "Blockchain is invalid.";
+            return false;
+        }
+        else
+        {
+            blocks.push_back(*it);
+            previousBlock = *it;
+        }
+    }
+    
+    INFO << "Blockchain merged" << std::endl;
     totalBlocks = blocks.size();
     return true;
 }
@@ -130,6 +153,7 @@ BlockChain::AddStatus BlockChain::AddBlock(Block* block)
     {
         if (isValidNewBlock(block, Get(block->Index - 1)))
         {
+            ++totalBlocks;
             blocks.push_back(block);
             return AddStatus::ADDED;
         }

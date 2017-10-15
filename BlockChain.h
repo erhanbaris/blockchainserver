@@ -15,6 +15,7 @@ public:
 	std::string SerializeChain(size_t startBlock);
 	Block* GetLastBlock();
     bool SetChain(std::vector<Block*>&);
+    bool Merge(std::vector<Block*>&);
     AddStatus AddBlock(Block*);
     
     static bool isValidNewBlock(Block * newBlock, Block * previousBlock);

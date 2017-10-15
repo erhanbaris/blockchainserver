@@ -58,7 +58,7 @@ struct BlockChainServerPimpl
     }
     
     static void alloc_cb(uv_handle_t * /*handle*/, size_t suggested_size, uv_buf_t* buf) {
-        *buf = uv_buf_init((char*)malloc(suggested_size), suggested_size);
+        *buf = uv_buf_init((char*)malloc(suggested_size), (unsigned int) suggested_size);
     }
     
     static void on_read(uv_stream_t* tcp, ssize_t nread, const uv_buf_t * buf) {
@@ -126,9 +126,6 @@ struct BlockChainServerPimpl
         Block * block = chain->NewBlock(client->RequestBuffer.c_str());
         if (block != NULL)
         {
-            
-            INFO << "Block Sending : " << block->Encode() << std::endl;
-            
             client->ResponseBuffer << "{\"Status\":true,\"Index\":" << block->Index << "\"}";
             
             std::string messageData = "{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::RES_LAST_BLOCK) + ",\"Block\":" + block->Encode() + "}";
@@ -148,7 +145,7 @@ struct BlockChainServerPimpl
     {
         if (isInteger(client->RequestBuffer.c_str()))
         {
-            Block * block = chain->Get(atoi(client->RequestBuffer.c_str()));
+            Block * block = chain->Get((size_t) atoi(client->RequestBuffer.c_str()));
             if (block != NULL)
                 client->ResponseBuffer << "{\"Status\":true,\"Data\":" << block->Data << "\"}";
             else
@@ -207,13 +204,13 @@ struct BlockChainServerPimpl
     
     void messageReceivedFromNode(std::string const& message, TcpClient& client)
     {
-        INFO << "Message received from node : " << message << std::endl;
+
     }
     
     void connectedToNewNode(TcpClient& client)
     {
         INFO << "Connected to remote server." << std::endl;
-        client.Send("{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::REQ_FULL_BLOCKCHAIN) +"}");
+        // client.Send("{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::REQ_FULL_BLOCKCHAIN) +"}");
     }
     
     ConnectToBlockStatus ConnectToNode(std::string address, size_t port)
@@ -234,12 +231,26 @@ struct BlockChainServerPimpl
         return ConnectToBlockStatus::ADDED;
     }
     
-    void DisconnectFromNode(std::string address)
+    void disconnectFromNode(std::string address)
     {
         auto end = connectedNodes.end();
         for(auto it = connectedNodes.begin(); it != end; ++it)
             if ((*it)->GetRemoteAddress() == address)
+            {
                 (*it)->Disconnect();
+                connectedNodes.erase(it);
+            }
+    }
+
+    void sync()
+    {
+        auto message = "{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::REQ_PARTIAL_BLOCKCHAIN) + ",\"Index\":" + std::to_string(chain->GetLastBlock()->Index) +"}";
+
+        auto connectedNodesEnd = connectedNodes.end();
+        for (auto it = connectedNodes.begin(); it != connectedNodesEnd; ++it)
+            (*it)->Send(std::move(message));
+
+        tcpSocket->BroadcastMessage(message);
     }
     
     static int on_message_complete(http_parser* parser) {
@@ -249,7 +260,7 @@ struct BlockChainServerPimpl
             client->ServerPimpl->addBlockCall(client);
         else if (client->Url == "/getblock")
             client->ServerPimpl->getBlockCall(client);
-        else if (client->Url == "/count")
+        else if (client->Url == "/totalblocks")
             client->ServerPimpl->totalBlockCall(client);
         else if (client->Url == "/blocks")
             client->ResponseBuffer << client->ServerPimpl->chain->SerializeChain();
@@ -258,11 +269,26 @@ struct BlockChainServerPimpl
         else if (client->Url == "/nodes")
             client->ServerPimpl->nodeListCall(client);
         else if (client->Url == "/removenode")
-            client->ServerPimpl->DisconnectFromNode(client->RequestBuffer.c_str());
+            client->ServerPimpl->disconnectFromNode(client->RequestBuffer.c_str());
+        else if (client->Url == "/sync")
+            client->ServerPimpl->sync();
         else if (client->Url == "/testclient")
         {
             client->RequestBuffer = "ws://127.0.0.1:" + std::to_string(client->ServerPimpl->tcpSocket->GetPort());
             client->ServerPimpl->addNodeCall(client);
+        }
+            else if (client->Url == "/help")
+        {
+            client->ResponseBuffer << "System functions:\r\n\r\n"
+                                   << " /createblock : Creating new block. Return a index number about block\r\n"
+                                   << " /getblock    : Get saved block via index\r\n"
+                                   << " /totalblocks : Total blocks count\r\n"
+                                   << " /blocks      : Download all blocks\r\n"
+                                   << " /addnode     : Add new node to system\r\n"
+                                   << " /nodes       : Get all connected nodes\r\n"
+                                   << " /removenode  : Disconnect from connected node\r\n"
+                                   << " /sync        : Synchronize local blocks with connected nodes. System automatically send last added block information for merging.\r\n\r\n"
+                                   << "All functions return json data. You have to check 'Status' variable for operation validity.";
         }
         else
             client->ResponseBuffer << "{\"Status\":false,\"Message\":\"Page not found\"}";
@@ -305,23 +331,51 @@ struct BlockChainServerPimpl
         {
             case MessageType::RES_LAST_BLOCK:
             {
-                INFO << "Received Last Block : " << message.Block->Encode() << std::endl;
+                INFO << "#RES_LAST_BLOCK" << std::endl;
                 auto addStatus = chain->AddBlock(message.Block);
 
                 switch(addStatus)
                 {
-                    case BlockChain::AddStatus::ADDED:
+                    case BlockChain::AddStatus::ADDED: {
+                        std::stringstream responseBuffer;
+                        responseBuffer << "{\"Status\":true,\"Type\":" << (int) MessageType::RES_LAST_BLOCK
+                                       << ",\"Block\":";
+                        responseBuffer << chain->GetLastBlock()->Encode();
+                        responseBuffer << "}";
+
+                        auto connectedNodesEnd = connectedNodes.end();
+                        for (auto it = connectedNodes.begin(); it != connectedNodesEnd; ++it)
+                            if (tcpClient.GetRemotePort() != (*it)->GetRemotePort() && tcpClient.GetRemoteAddress() != (*it)->GetRemoteAddress())
+                                (*it)->Send(std::move(responseBuffer.str()));
+
+                        tcpSocket->BroadcastMessageExpect(responseBuffer.str(), tcpClient);
                         break;
+                    }
 
                     case BlockChain::AddStatus::BLOCK_IS_NEWER:
                     {
                         size_t lastIndex = chain->GetLastBlock()->Index;
-                        //tcpClient.Send("");
+                        
+                        std::stringstream responseBuffer;
+                        responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::REQ_PARTIAL_BLOCKCHAIN << ",\"Index\":";
+                        responseBuffer << lastIndex;
+                        responseBuffer << "}";
+                        
+                        tcpClient.Send(responseBuffer.str());
+                        
                         break;
                     }
 
                     case BlockChain::AddStatus::BLOCK_IS_OLDER:
+                    {
+                        std::stringstream responseBuffer;
+                        responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::RES_PARTIAL_BLOCKCHAIN << ",\"Blocks\":";
+                        responseBuffer << chain->SerializeChain(message.Block->Index);
+                        responseBuffer << "}";
+                        
+                        tcpClient.Send(responseBuffer.str());
                         break;
+                    }
 
                     case BlockChain::AddStatus::SKIPPED:
                         break;
@@ -332,9 +386,18 @@ struct BlockChainServerPimpl
 
                 break;
             }
+                
+            case MessageType::RES_PARTIAL_BLOCKCHAIN:
+            {
+                INFO << "#RES_PARTIAL_BLOCKCHAIN" << std::endl;
+                bool mergeStatus = chain->Merge(*message.Blocks);
+                
+                break;
+            }
 
             case MessageType::RES_FULL_BLOCKCHAIN:
             {
+                INFO << "#RES_FULL_BLOCKCHAIN" << std::endl;
                 bool chainReplaceStatus = chain->SetChain(*message.Blocks);
 
                 break;
@@ -342,6 +405,7 @@ struct BlockChainServerPimpl
 
             case MessageType::REQ_FULL_BLOCKCHAIN:
             {
+                INFO << "#REQ_FULL_BLOCKCHAIN" << std::endl;
                 std::stringstream responseBuffer;
                 responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::RES_FULL_BLOCKCHAIN << ",\"Blocks\":";
                 responseBuffer << chain->SerializeChain();
@@ -353,6 +417,7 @@ struct BlockChainServerPimpl
 
             case MessageType::REQ_LAST_BLOCK:
             {
+                INFO << "#REQ_LAST_BLOCK" << std::endl;
                 std::stringstream responseBuffer;
                 responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::RES_LAST_BLOCK << ",\"Block\":";
                 responseBuffer << chain->GetLastBlock()->Encode();
@@ -364,6 +429,7 @@ struct BlockChainServerPimpl
 
             case MessageType::REQ_PARTIAL_BLOCKCHAIN:
             {
+                INFO << "#REQ_PARTIAL_BLOCKCHAIN" << std::endl;
                 std::stringstream responseBuffer;
                 responseBuffer << "{\"Status\":true,\"Type\":" << (int)MessageType::RES_PARTIAL_BLOCKCHAIN << ",\"Blocks\":";
                 responseBuffer << chain->SerializeChain(message.Index);
@@ -375,6 +441,7 @@ struct BlockChainServerPimpl
 
             case MessageType::RES_NODE_LIST:
             {
+                INFO << "#RES_NODE_LIST" << std::endl;
                 auto nodesEnd = message.Nodes->end();
 
                 for (auto it = message.Nodes->begin(); it != nodesEnd; ++it)
@@ -394,6 +461,7 @@ struct BlockChainServerPimpl
 
             case MessageType::REQ_NODE_LIST:
             {
+                INFO << "#REQ_NODE_LIST" << std::endl;
                 auto nodesEnd = connectedNodes.end();
                 auto it = connectedNodes.begin();
 
@@ -415,7 +483,8 @@ struct BlockChainServerPimpl
                 break;
             }
 
-            case MessageType::RES_INFO:
+            case MessageType::RES_NODE_INFO:
+                INFO << "#RES_INFO" << std::endl;
                 break;
         }
     }
