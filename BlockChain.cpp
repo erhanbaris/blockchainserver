@@ -12,26 +12,19 @@ BlockChain::BlockChain()
     genesisBlock->TimeStamp = 1508090809;
     genesisBlock->Data = "Genesis block";
     genesisBlock->SetHash();
-    
-    ++totalBlocks;
-    lastBlock = genesisBlock;
-    
-    totalBlocks = 1;
-    
+
     blocks.push_back(genesisBlock);
 }
 
-Block* BlockChain::NewBlock(char const * data)
+Block* BlockChain::NewBlock(std::string& data)
 {
     Block * block = new Block;
-    block->Index = lastBlock->Index + 1;
-    block->PreviousHash = lastBlock->Hash;
+    block->Index = GetLastBlock()->Index + 1;
+    block->PreviousHash = GetLastBlock()->Hash;
     block->TimeStamp = getTimestamp();
-    block->Data = strdup(data);
+    block->Data = data;
     block->SetHash();
     
-    ++totalBlocks;
-    lastBlock = block;
     blocks.push_back(block);
     
     return block;
@@ -73,7 +66,6 @@ bool BlockChain::SetChain(std::vector<Block*>& newBlocks)
     for (auto it = newBlocks.begin(); it != blocksEnd; ++it)
         blocks.push_back(*it);
     
-    totalBlocks = blocks.size();
     return true;
 }
 
@@ -97,13 +89,12 @@ bool BlockChain::Merge(std::vector<Block*>& newBlocks)
     }
     
     INFO << "Blockchain merged" << std::endl;
-    totalBlocks = blocks.size();
     return true;
 }
 
 size_t BlockChain::TotalBlocks()
 {
-    return totalBlocks;
+    return blocks.size();
 }
 
 bool BlockChain::isValidNewBlock(Block * newBlock, Block * previousBlock)
@@ -127,7 +118,7 @@ std::string BlockChain::SerializeChain(size_t startBlock)
     auto it = blocks.begin() + startBlock;
     
     stream << "[";
-    if (end != it)
+    if (blocks.size() >= startBlock && end != it)
     {
         stream << (*it)->Encode();
         ++it;
@@ -153,7 +144,6 @@ BlockChain::AddStatus BlockChain::AddBlock(Block* block)
     {
         if (isValidNewBlock(block, Get(block->Index - 1)))
         {
-            ++totalBlocks;
             blocks.push_back(block);
             return AddStatus::ADDED;
         }
@@ -179,5 +169,33 @@ std::string BlockChain::SerializeChain()
 
 Block* BlockChain::GetLastBlock()
 {
-    return lastBlock;
+	return blocks[blocks.size() - 1];
+}
+
+bool BlockChain::Validate(int index, std::string hash, std::string previousHash, int nonce, int timeStamp)
+{
+	if (index < 0)
+		return false;
+
+	if (hash.empty())
+		return false;
+
+	if (nonce < 0)
+		return false;
+
+	if (timeStamp < 0)
+		return false;
+
+	Block* block = Get(index);
+
+	if (block == NULL)
+		return false;
+
+	if (block->Hash != hash ||
+		block->Nonce != nonce ||
+		block->TimeStamp != timeStamp ||
+		block->PreviousHash != previousHash)
+		return false;
+
+	return true;
 }

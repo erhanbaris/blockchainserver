@@ -31,10 +31,8 @@ struct NodeMessage {
 
     MessageType Type;
 
-    union {
-        struct Block* Block;
-        std::vector<struct Block*>* Blocks;
-        std::vector<std::string>* Nodes;
-        size_t Index;
-    };
+    struct Block* Block;
+    std::vector<struct Block*>* Blocks;
+    std::vector<std::string>* Nodes;
+    size_t Index;
 };

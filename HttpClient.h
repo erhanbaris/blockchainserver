@@ -5,21 +5,25 @@
 #include <string>
 #include <sstream>
 #include <chrono>
-#include <blockchainserver.h>
 #include <uv.h>
 
-struct HttpClient
+class HttpServer;
+class HttpClient
 {
+public:
 	void * Handle; // uv_tcp_t
 	void * Parser; // http_parser
 	void * Async; // uv_async_t
+
+	void * Data1; // Reserved for TcpClientUv
+	void * Data2;
 
 	std::map<std::string, std::string> Headers;
 	std::string LastHeaderItem;
 	std::string Url;
 	std::string RequestBuffer;
 	std::stringstream ResponseBuffer;
-	BlockChainServerPimpl *ServerPimpl;
+	HttpServer* ServerPimpl;
 
 	HttpClient();
 	void Send();

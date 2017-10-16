@@ -19,12 +19,7 @@ NodeMessage::NodeMessage(std::string const& message)
                 break;
             }
 
-            case MessageType::RES_FULL_BLOCKCHAIN: {
-                Blocks = new std::vector<struct Block*>();
-                Block::Decode(json["Blocks"], *Blocks);
-                break;
-            }
-
+            case MessageType::RES_FULL_BLOCKCHAIN:
             case MessageType::RES_PARTIAL_BLOCKCHAIN: {
                 Blocks = new std::vector<struct Block*>();
                 Block::Decode(json["Blocks"], *Blocks);
@@ -55,9 +50,22 @@ NodeMessage::NodeMessage(std::string const& message)
                 break;
                 
             case MessageType::RES_NODE_INFO:
+            {
+                Blocks = new std::vector<struct Block*>();
+                Block::Decode(json["Blocks"], *Blocks);
+                
+                std::vector<json11::Json> nodesJson = json["Nodes"].array_items();
+                auto nodesEnd = nodesJson.end();
+                
+                Nodes = new std::vector<std::string>();
+                for (auto it = nodesJson.begin(); it != nodesEnd; ++it)
+                    Nodes->push_back(it->string_value());
+                
                 break;
+            }
                 
             case MessageType::REQ_NODE_INFO:
+                Index = (size_t) json["Index"].int_value();
                 break;
         }
     }

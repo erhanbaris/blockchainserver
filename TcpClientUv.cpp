@@ -13,9 +13,26 @@
 using namespace std;
 using namespace blockchain::tcp;
 
+namespace {
+	static char* _strndup(char *str, int chars)
+	{
+		char *buffer;
+		int n;
+
+		buffer = (char *)malloc(chars + 1);
+		if (buffer)
+		{
+			for (n = 0; ((n < chars) && (str[n] != 0)); n++) buffer[n] = str[n];
+			buffer[n] = 0;
+		}
+
+		return buffer;
+	}
+}
+
 struct TcpClientUvPimpl
 {
-    enum class AsyncType { UNDEFINED, SEND, CLOSE };
+    enum class AsyncType { UNDEFINED, SEND, CLOSE, SEND_AND_CLOSE };
 
     std::string address;
     size_t port;
@@ -77,7 +94,7 @@ struct TcpClientUvPimpl
         TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)tcp->data;
 
         if(nread >= 0) {
-            char* tmpData = strndup(buf->base, nread);
+            char* tmpData = _strndup(buf->base, nread);
             pimpl->tmpBuffer << tmpData;
 
             if ((size_t)nread == buf->len && 65536 == nread)
@@ -105,13 +122,19 @@ struct TcpClientUvPimpl
     static void afterSend(uv_write_t* handle, int status) {
         TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)handle->data;
         pimpl->sendMessage = "";
-        delete handle->bufs;
     }
+
+	static void afterSendAndClose(uv_write_t* handle, int status) {
+		TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)handle->data;
+		pimpl->sendMessage = "";
+		uv_close((uv_handle_t*)pimpl->client, closeCb);
+	}
 
     static void async(uv_async_t *handle) {
         TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)handle->data;
 
-        if (pimpl->asyncType == AsyncType::SEND) {
+        if (pimpl->asyncType == AsyncType::SEND ||
+			pimpl->asyncType == AsyncType::SEND_AND_CLOSE) {
             //pimpl->sendMessage.append("\n");
 
             uv_buf_t resbuf;
@@ -120,9 +143,14 @@ struct TcpClientUvPimpl
             
             uv_write_t *write_req = new uv_write_t;
             write_req->data = pimpl;
-            uv_write(write_req, (uv_stream_t *) pimpl->client, &resbuf, 1, afterSend);
+			
+			if (pimpl->asyncType == AsyncType::SEND_AND_CLOSE)
+				uv_write(write_req, (uv_stream_t *) pimpl->client, &resbuf, 1, afterSendAndClose);
+			else 
+				uv_write(write_req, (uv_stream_t *)pimpl->client, &resbuf, 1, afterSend);
         }
-        else if (pimpl->asyncType == AsyncType::CLOSE) {
+		
+		if (pimpl->asyncType == AsyncType::CLOSE) {
             uv_close((uv_handle_t*)handle, closeCb);
         }
 
@@ -225,6 +253,13 @@ void TcpClientUv::Send(std::string const&& message)
     pimpl->sendMessage = message;
     pimpl->asyncType = TcpClientUvPimpl::AsyncType::SEND;
     uv_async_send(pimpl->asyncOperation);
+}
+
+void TcpClientUv::SendAndClose(std::string const && message)
+{
+	pimpl->sendMessage = message;
+	pimpl->asyncType = TcpClientUvPimpl::AsyncType::SEND_AND_CLOSE;
+	uv_async_send(pimpl->asyncOperation);
 }
 
 void TcpClientUv::SetOnConnect(ConnectCallback cb)

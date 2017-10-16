@@ -5,7 +5,13 @@
 
 #include <sha256.h>
 #include <TcpServer.h>
+#include <sstream>
+#include <iostream>
+
 using namespace blockchain::tcp;
+
+
+typedef std::function<void(std::string&, std::stringstream &)> OperationCallback;
 
 struct BlockChainServerPimpl;
 class BlockChainServer

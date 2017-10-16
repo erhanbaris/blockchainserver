@@ -16,11 +16,15 @@ namespace blockchain {
             virtual void Disconnect() = 0;
             virtual bool IsConnected() = 0;
             virtual void Send(std::string const &&) = 0;
+			virtual void SendAndClose(std::string const &&) = 0;
             virtual std::string GetRemoteAddress() = 0;
             virtual size_t GetRemotePort() = 0;
             virtual void SetOnMessage(MessageCallback) = 0;
             virtual void SetOnDisconnect(DisconnectCallback) = 0;
             virtual void SetOnConnect(ConnectCallback) = 0;
+
+			void* Data1; //Reserved for future operations
+			void* Data2; //Reserved for future operations
         };
     }
 }

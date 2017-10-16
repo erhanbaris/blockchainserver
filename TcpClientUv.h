@@ -17,6 +17,7 @@ public:
     void Disconnect();
     bool IsConnected();
     void Send(std::string const &&);
+	void SendAndClose(std::string const &&);
     std::string GetRemoteAddress();
     size_t GetRemotePort();
     

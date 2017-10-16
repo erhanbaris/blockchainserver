@@ -24,6 +24,7 @@ struct TcpServerUvPimpl
     // callbacks
     TcpServer::MessageReceivedCallback messageReceivedCallback;
     TcpServer::ClientConnectedCallback clientConnectedCallback;
+	TcpServer::ClientDisconnectedCallback clientDisconnectedCallback;
 
     TcpServerUvPimpl()
     {
@@ -52,18 +53,17 @@ struct TcpServerUvPimpl
 
     void onDisconnect(TcpClient& client)
     {
-
+		if (clientDisconnectedCallback)
+			clientDisconnectedCallback(client);
     }
 
     static void onConnect(uv_stream_t* serverHandle, int status) {
-
-        INFO << "Client connected to server";
         TcpServerUvPimpl* pimpl = (TcpServerUvPimpl*) serverHandle->data;
 
         TcpClient* tcpClient = new TcpClientUv(serverHandle);
         tcpClient->SetOnMessage(std::bind(&TcpServerUvPimpl::onMessage, pimpl, std::placeholders::_1, std::placeholders::_2));
 
-        if (pimpl->messageReceivedCallback)
+        if (pimpl->clientConnectedCallback)
             pimpl->clientConnectedCallback(*tcpClient);
         
         pimpl->clients.push_back(tcpClient);
@@ -99,8 +99,6 @@ void TcpServerUv::BroadcastMessageExpect(std::string const &message, TcpClient& 
             (*it)->Send(std::move(message));
 }
 
-
-
 void TcpServerUv::SetMessageReceived(MessageReceivedCallback cb)
 {
     pimpl->messageReceivedCallback = cb;
@@ -108,7 +106,11 @@ void TcpServerUv::SetMessageReceived(MessageReceivedCallback cb)
 
 void TcpServerUv::SetClientConnected(ClientConnectedCallback cb)
 {
-    pimpl->clientConnectedCallback = cb;
+	pimpl->clientConnectedCallback = cb;
+}
+void TcpServerUv::SetClientDisconnected(ClientDisconnectedCallback cb)
+{
+	pimpl->clientDisconnectedCallback = cb;
 }
 
 void TcpServerUv::Stop()

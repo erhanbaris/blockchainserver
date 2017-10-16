@@ -1,10 +1,14 @@
 #include <HttpClient.h>
+#include <http_parser.h>
+#include <TcpClientUv.h>
 
 HttpClient::HttpClient()
 {
 	Handle = nullptr;
 	Parser = nullptr;
 	Async = nullptr;
+	Data1 = nullptr;
+	Data2 = nullptr;
 }
 
 void HttpClient::sendAsync(uv_async_t *handle) {
@@ -20,21 +24,23 @@ void HttpClient::sendAsync(uv_async_t *handle) {
 		<< "\r\n";
 	rep << bufferStr;
 	std::string res = rep.str();
-	uv_buf_t resbuf;
-	resbuf.base = (char *)res.c_str();
-	resbuf.len = res.size();
 
-	uv_write_t *write_req = new uv_write_t;
 
-	int r = uv_write(write_req, (uv_stream_t *)client->Handle, &resbuf, 1, afterWrite);
-	uv_close((uv_handle_t*)client->Async, NULL);
+	((TcpClientUv*)client->Data1)->SendAndClose(std::move(res));
 }
-
-
 
 void HttpClient::Send()
 {
-	uv_async_send((uv_async_t*)this->Async);
+	std::string bufferStr = this->ResponseBuffer.str();
+	std::ostringstream rep;
+	rep << "HTTP/1.1 200 OK\r\n"
+		<< "Content-Type: application/json charset=utf-8\r\n"
+		<< "Connection: close\r\n"
+		<< "Content-Length: " << bufferStr.size() << "\r\n"
+		<< "Access-Control-Allow-Origin: *" << "\r\n"
+		<< "\r\n";
+	rep << bufferStr;
+	((TcpClientUv*)this->Data1)->SendAndClose(rep.str());
 }
 
 void HttpClient::afterWrite(uv_write_t* req, int status) {
@@ -46,13 +52,13 @@ void HttpClient::onClose(uv_handle_t* handle) {
 	HttpClient* client = (HttpClient*)handle->data;
 
 	if (client->Parser != nullptr)
-		delete client->Parser;
+		delete (http_parser*)client->Parser;
 
 	if (client->Handle != nullptr)
-		delete client->Handle;
+		delete (uv_tcp_t*)client->Handle;
 
 	if (client->Async != nullptr)
-		delete client->Async;
+		delete (uv_async_t*)client->Async;
 
 	delete client;
 }

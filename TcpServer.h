@@ -12,6 +12,7 @@ namespace blockchain {
         public:
             typedef std::function<void(std::string const &, TcpClient &)> MessageReceivedCallback;
             typedef std::function<void(TcpClient &)> ClientConnectedCallback;
+			typedef std::function<void(TcpClient &)> ClientDisconnectedCallback;
 
             virtual void Start(size_t port) = 0;
             virtual void Stop() = 0;
@@ -22,6 +23,7 @@ namespace blockchain {
             
             virtual void SetMessageReceived(MessageReceivedCallback) = 0;
             virtual void SetClientConnected(ClientConnectedCallback) = 0;
+			virtual void SetClientDisconnected(ClientDisconnectedCallback) = 0;
         };
     }
 }

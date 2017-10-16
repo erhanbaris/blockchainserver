@@ -2,8 +2,8 @@
 #include <vector>
 #include <string>
 
-#define HTTP_SERVER_PORT 4444
-#define TCP_SERVER_PORT 4445
+#define HTTP_SERVER_PORT 6000
+#define TCP_SERVER_PORT 6001
 
 #ifdef MINING_ACTIVE
 	#define DIFFICULTY 4	
@@ -16,8 +16,10 @@
 #endif
 
 #define INFO std::cout << std::endl
-#define ERROR std::cout << std::endl
+#define ALERT std::cout << std::endl
 
 #include <uv.h>
 
 extern uv_loop_t* loop;
+extern size_t HTTP_PORT;
+extern size_t TCP_PORT;
