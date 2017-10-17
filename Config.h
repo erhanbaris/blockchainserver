@@ -2,8 +2,8 @@
 #include <vector>
 #include <string>
 
-#define HTTP_SERVER_PORT 6000
-#define TCP_SERVER_PORT 6001
+#define HTTP_SERVER_PORT 8080
+#define TCP_SERVER_PORT 8081
 
 #ifdef MINING_ACTIVE
 	#define DIFFICULTY 4	

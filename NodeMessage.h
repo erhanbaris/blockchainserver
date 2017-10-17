@@ -34,5 +34,7 @@ struct NodeMessage {
     struct Block* Block;
     std::vector<struct Block*>* Blocks;
     std::vector<std::string>* Nodes;
+	size_t HttpPort;
+	size_t TcpPort;
     size_t Index;
 };

@@ -47,26 +47,26 @@ struct HttpServerPimpl
 			delete parser_settings;
 	}
 
-	void messageReceived(std::string const& message, TcpClient& client)
+	void messageReceived(std::string const& message, TcpClient* client)
 	{
-		auto parsedSize = http_parser_execute((http_parser*)((HttpClient*)client.Data1)->Parser, parser_settings, message.c_str(), message.size());
+		auto parsedSize = http_parser_execute((http_parser*)((HttpClient*)client->Data1)->Parser, parser_settings, message.c_str(), message.size());
 		if (parsedSize == message.size())
 		{
-            auto parser = (http_parser*)((HttpClient*)client.Data1)->Parser;
+            auto parser = (http_parser*)((HttpClient*)client->Data1)->Parser;
             if (messageReceivedCallback)
-                messageReceivedCallback((HttpClient*)client.Data1);
+                messageReceivedCallback((HttpClient*)client->Data1);
 		}
 	}
 
-	void clientConnected(TcpClient& client)
+	void clientConnected(TcpClient* client)
 	{
 		HttpClient* httpClient = new HttpClient;
 		http_parser* httpParser = new http_parser;
 
-		httpClient->Data1 = &client;
+		httpClient->Data1 = client;
 		httpClient->Parser = httpParser;
 		httpParser->data = httpClient;
-		client.Data1 = httpClient;
+		client->Data1 = httpClient;
 
 		http_parser_init(httpParser, HTTP_REQUEST);
         
@@ -74,12 +74,12 @@ struct HttpServerPimpl
             clientConnectedCallback(httpClient);
 	}
 
-	void clientDisconnected(TcpClient& client)
+	void clientDisconnected(TcpClient* client)
 	{
-        HttpClient * httpClient = (HttpClient*)client.Data1;
+        HttpClient * httpClient = (HttpClient*)client->Data1;
         
         delete (http_parser*)httpClient->Parser;
-        delete &client;
+        delete client;
         
         if (clientDisconnectedCallback)
             clientDisconnectedCallback(httpClient);

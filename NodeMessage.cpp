@@ -1,11 +1,11 @@
 #include <NodeMessage.h>
 
-NodeMessage::NodeMessage()
+NodeMessage::NodeMessage() : Block(NULL), Blocks(NULL), Nodes(NULL), HttpPort(0), TcpPort(0), Index(0)
 {
-
+    
 }
 
-NodeMessage::NodeMessage(std::string const& message)
+NodeMessage::NodeMessage(std::string const& message) : Block(NULL), Blocks(NULL), Nodes(NULL), HttpPort(0), TcpPort(0), Index(0)
 {
     std::string err;
     json11::Json const json = json11::Json::parse(message, err);
@@ -66,6 +66,8 @@ NodeMessage::NodeMessage(std::string const& message)
                 
             case MessageType::REQ_NODE_INFO:
                 Index = (size_t) json["Index"].int_value();
+                TcpPort = (size_t)json["TcpPort"].int_value();
+                HttpPort = (size_t)json["HttpPort"].int_value();
                 break;
         }
     }

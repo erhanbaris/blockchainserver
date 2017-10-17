@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iostream>
 #include <HttpClient.h>
+#include <functional>
 
 
 struct HttpServerPimpl;

@@ -45,13 +45,13 @@ struct TcpServerUvPimpl
         uv_listen((uv_stream_t*)tcpServer, 1000, onConnect);
     }
 
-    void onMessage(std::string const& message, TcpClient& client)
+    void onMessage(std::string const& message, TcpClient* client)
     {
         if (messageReceivedCallback)
             messageReceivedCallback(message, client);
     }
 
-    void onDisconnect(TcpClient& client)
+    void onDisconnect(TcpClient* client)
     {
 		if (clientDisconnectedCallback)
 			clientDisconnectedCallback(client);
@@ -59,12 +59,12 @@ struct TcpServerUvPimpl
 
     static void onConnect(uv_stream_t* serverHandle, int status) {
         TcpServerUvPimpl* pimpl = (TcpServerUvPimpl*) serverHandle->data;
-
+        
         TcpClient* tcpClient = new TcpClientUv(serverHandle);
         tcpClient->SetOnMessage(std::bind(&TcpServerUvPimpl::onMessage, pimpl, std::placeholders::_1, std::placeholders::_2));
 
         if (pimpl->clientConnectedCallback)
-            pimpl->clientConnectedCallback(*tcpClient);
+            pimpl->clientConnectedCallback(tcpClient);
         
         pimpl->clients.push_back(tcpClient);
     }
@@ -82,21 +82,6 @@ void TcpServerUv::Start(size_t port) {
 size_t TcpServerUv::GetPort()
 {
     return pimpl->port;
-}
-
-void TcpServerUv::BroadcastMessage(std::string const& message)
-{
-    auto end = pimpl->clients.end();
-    for(auto it = pimpl->clients.begin(); it != end; ++it)
-        (*it)->Send(std::move(message));
-}
-
-void TcpServerUv::BroadcastMessageExpect(std::string const &message, TcpClient& tcpClient)
-{
-    auto end = pimpl->clients.end();
-    for(auto it = pimpl->clients.begin(); it != end; ++it)
-        if (tcpClient.GetRemotePort() != (*it)->GetRemotePort() && tcpClient.GetRemoteAddress() != (*it)->GetRemoteAddress())
-            (*it)->Send(std::move(message));
 }
 
 void TcpServerUv::SetMessageReceived(MessageReceivedCallback cb)

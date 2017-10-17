@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <sstream>
+#include <Tools.h>
 
 using namespace std;
 using namespace blockchain::tcp;
@@ -82,7 +83,7 @@ struct TcpClientUvPimpl
         TcpClientUvPimpl * pimpl = (TcpClientUvPimpl*)handle->data;
 
         if (pimpl->disconnectCallback)
-            pimpl->disconnectCallback(*pimpl->tcpClient);
+            pimpl->disconnectCallback(pimpl->tcpClient);
     }
 
     static void allocCb(uv_handle_t* handle, size_t size, uv_buf_t* buf) {
@@ -106,7 +107,7 @@ struct TcpClientUvPimpl
             if (!pimpl->largeBufferStarted && pimpl->messageCallback)
             {
                 auto message = pimpl->tmpBuffer.str();
-                pimpl->messageCallback(message, *pimpl->tcpClient);
+                pimpl->messageCallback(message, pimpl->tcpClient);
                 pimpl->tmpBuffer.str(std::string());
             }
 
@@ -175,7 +176,7 @@ struct TcpClientUvPimpl
         uv_read_start(stream, allocCb, readCb);
 
         if (pimpl->connectCallback)
-            pimpl->connectCallback(*pimpl->tcpClient);
+            pimpl->connectCallback(pimpl->tcpClient);
     }
 };
 
@@ -223,6 +224,19 @@ TcpClientUv::TcpClientUv(uv_stream_t* serverHandle)
 
     uv_tcp_init(loop, pimpl->client);
     uv_accept(serverHandle, (uv_stream_t*)pimpl->client);
+    
+    struct sockaddr_in name;
+    int namelen = sizeof(name);
+    if (uv_tcp_getpeername(pimpl->client, (struct sockaddr*) &name, &namelen))
+        INFO << "uv_tcp_getpeername";
+    
+    char addr[16];
+    static char buf[32];
+    uv_inet_ntop(AF_INET, &name.sin_addr, addr, sizeof(addr));
+
+    pimpl->address = std::string(addr);
+    pimpl->port = name.sin_port;
+
 
     uv_async_init(loop, ((uv_async_t*)pimpl->asyncOperation), TcpClientUvPimpl::async);
     uv_read_start((uv_stream_t*)pimpl->client, TcpClientUvPimpl::allocCb, TcpClientUvPimpl::readCb);

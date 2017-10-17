@@ -13,11 +13,36 @@
 #include <json11.hpp>
 #include <sstream>
 #include <NodeMessage.h>
+#include <Base64.h>
+#include <Tools.h>
 
 namespace
 {
     static http_parser_settings * parser_settings;
 }
+
+enum class NodeConnectionType { REMOTE_CONNECTION, CLIENT };
+
+struct NodeInfo {
+	NodeConnectionType ConnectionType;
+	std::string Address;
+	size_t HttpPort;
+	size_t TcpPort;
+	TcpClient* TcpConnection;
+	bool IsConnected;
+
+    NodeInfo()
+    {
+        HttpPort = 0;
+        TcpPort = 0;
+        TcpConnection = NULL;
+    }
+
+    std::string GetFullAddress()
+    {
+        return Address + ":" + std::to_string(TcpPort);
+    }
+};
 
 enum class ConnectToBlockStatus { ADDED = 0, ALREADY_ADDED = 1 };
 
@@ -30,14 +55,13 @@ struct BlockChainServerPimpl
     uv_tcp_t* tcpServer;
     uv_timer_t elapsedTimer;
     BlockChain* chain;
+	std::vector<NodeInfo> nodes;
 
 	std::map<std::string, OperationCallback> operationCallbacks;
     
     bool largeContentReceiving;
     std::stringstream buffer;
-    
-    std::vector<TcpClient*> connectedNodes;
-   
+
     BlockChainServerPimpl(BlockChainServer * pServer)
     {
         server = pServer;
@@ -93,25 +117,28 @@ struct BlockChainServerPimpl
 
 	void disconnectFromNodeOperation(std::string& request, std::stringstream & response)
 	{
-		auto end = connectedNodes.end();
-		for (auto it = connectedNodes.begin(); it != end; ++it)
-			if ((*it)->GetRemoteAddress() == request)
-			{
-				(*it)->Disconnect();
-				connectedNodes.erase(it);
-			}
+        AddressPort address(request);
+
+        if (address.Success) {
+            auto end = nodes.end();
+            for (auto it = nodes.begin(); it != end; ++it)
+                if ((*it).Address == address.Address && (*it).TcpPort == address.Port) {
+                    (*it).TcpConnection->Disconnect();
+                    nodes.erase(it);
+                }
+        }
 	}
 
 	void syncOperation(std::string& request, std::stringstream & response)
 	{
 		auto message = "{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::REQ_PARTIAL_BLOCKCHAIN) + ",\"Index\":" + std::to_string(chain->GetLastBlock()->Index) + "}";
 
-		auto connectedNodesEnd = connectedNodes.end();
-		for (auto it = connectedNodes.begin(); it != connectedNodesEnd; ++it)
-			(*it)->Send(std::move(message));
-
-		tcpSocket->BroadcastMessage(message);
-	}
+		auto connectedNodesEnd = nodes.end();
+		for (auto it = nodes.begin(); it != connectedNodesEnd; ++it)
+			(*it).TcpConnection->Send(std::move(message));
+        
+        response << "{\"Status\":true}";
+    }
 
 	void validateOperation(std::string& request, std::stringstream & response)
 	{
@@ -124,9 +151,9 @@ struct BlockChainServerPimpl
 		{
 			auto index = json["Index"].int_value();
 			auto hash = json["Hash"].string_value();
-			auto previousHash = json["Hash"].string_value();
+			auto previousHash = json["PreviousHash"].string_value();
 			auto nonce = json["Nonce"].int_value();
-			auto timeSpan = json["Timespan"].int_value();
+			auto timeSpan = json["TimeStamp"].int_value();
 
 			auto validateStatus = chain->Validate(index, hash, previousHash, nonce, timeSpan);
 			if (validateStatus)
@@ -140,7 +167,9 @@ struct BlockChainServerPimpl
 
 	void blocksOperation(std::string& request, std::stringstream & response)
 	{
-		response << chain->SerializeChain();
+		response << "{\"Status\":true,\"Blocks\":"
+				 << chain->SerializeChain()
+				 << "}";
 	}
 
 	void createBlockOperation(std::string& request, std::stringstream & response)
@@ -148,16 +177,12 @@ struct BlockChainServerPimpl
 		Block * block = chain->NewBlock(request);
 		if (block != NULL)
 		{
-			response << "{\"Status\":true,\"Index\":" << block->Index << "\"}";
+			response << "{\"Status\":true,\"Index\":" << block->Index << "}";
 
 			std::string messageData = "{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::RES_LAST_BLOCK) + ",\"Block\":" + block->Encode() + "}";
-
-			if (tcpSocket != NULL)
-				tcpSocket->BroadcastMessage("{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::RES_LAST_BLOCK) + ",\"Block\":" + block->Encode() + "}");
-
-			auto connectedNodesEnd = connectedNodes.end();
-			for (auto it = connectedNodes.begin(); it != connectedNodesEnd; ++it)
-				(*it)->Send(std::move(messageData));
+			auto connectedNodesEnd = nodes.end();
+			for (auto it = nodes.begin(); it != connectedNodesEnd; ++it)
+				(*it).TcpConnection->Send(std::move(messageData));
 		}
 		else
 			response << "{\"Status\":false,\"Message\":\"Block not added.\"}";
@@ -169,7 +194,13 @@ struct BlockChainServerPimpl
 		{
 			Block * block = chain->Get((size_t)atoi(request.c_str()));
 			if (block != NULL)
-				response << "{\"Status\":true,\"Data\":" << block->Data << "\"}";
+			{
+				std::string data;
+				if (!block->Data.empty())
+					Base64::Encode(block->Data, &data);
+
+				response << "{\"Status\":true,\"Data\":\"" << data << "\"}";
+			}
 			else
 				response << "{\"Status\":false,\"Message\":\"Block not found.\"}";
 		}
@@ -180,17 +211,12 @@ struct BlockChainServerPimpl
 
 	void addNodeOperation(std::string& request, std::stringstream & response)
 	{
-		std::stringstream ss(request.c_str());
-		std::string item;
-		std::vector<std::string> tokens;
-		while (std::getline(ss, item, ':'))
-			tokens.push_back(item);
-
-		if (tokens.size() == 2)
+        struct AddressPort info(request);
+		if (info.Success)
 		{
-			auto status = ConnectToNode(tokens[0], (size_t)stoi(tokens[1]));
+			auto status = ConnectToNode(info.Address, info.Port);
 			if (status == ConnectToBlockStatus::ADDED)
-				response << "{\"Status\":true:\"Message\":\"Node will be added.\"}";
+				response << "{\"Status\":true,\"Message\":\"Node will be added.\"}";
 			else
 				response << "{\"Status\":false,\"Message\":\"Node already added.\"}";
 		}
@@ -201,17 +227,17 @@ struct BlockChainServerPimpl
 	void nodeListOperation(std::string& request, std::stringstream & response)
 	{
 
-		auto nodesEnd = connectedNodes.end();
-		auto it = connectedNodes.begin();
+		auto nodesEnd = nodes.end();
+		auto it = nodes.begin();
 
 		response << "{\"Status\":true,\"Nodes\":[";
 		if (it != nodesEnd)
 		{
-			response << "\"" << (*it)->GetRemoteAddress() << ":" << (*it)->GetRemotePort() << "\"";
+			response << "\"" << (*it).Address << ":" << (*it).TcpPort << "\"";
 			++it;
 
 			for (; it != nodesEnd; ++it)
-				response << "," << "\"" << *it << "\"";
+				response << "," << "\"" << (*it).Address << ":" << (*it).TcpPort << "\"";
 		}
 		response << "]}";
 	}
@@ -246,20 +272,13 @@ struct BlockChainServerPimpl
         
     }
     /* Http Callbacks */
-    
-    
-    
-    void connectedToNewNode(TcpClient& client)
-    {
-        INFO << "Connected to remote server." << std::endl;
-        // client.Send("{\"Status\":true,\"Type\":" + std::to_string((int)MessageType::REQ_FULL_BLOCKCHAIN) +"}");
-    }
+
     
     ConnectToBlockStatus ConnectToNode(std::string address, size_t port)
     {
-        auto end = connectedNodes.end();
-        for (auto it = connectedNodes.begin(); it != end; ++it)
-            if ((*it)->GetRemoteAddress() == address && (*it)->GetRemotePort() == port)
+        auto end = nodes.end();
+        for (auto it = nodes.begin(); it != end; ++it)
+            if ((*it).Address == address && (*it).TcpPort == port)
                 return ConnectToBlockStatus::ALREADY_ADDED;
         
         TcpClient *client = tcpSocket->CreateClient();
@@ -269,40 +288,68 @@ struct BlockChainServerPimpl
         client->SetOnMessage(std::bind(&BlockChainServerPimpl::tcpMessageReceived, this, std::placeholders::_1, std::placeholders::_2));
         
         client->Connect(address, port);
-        connectedNodes.push_back(client);
-        
+        struct NodeInfo nodeInfo;
+        nodeInfo.Address = address;
+        nodeInfo.TcpPort = port;
+        nodeInfo.TcpConnection = client;
+        nodeInfo.ConnectionType = NodeConnectionType::REMOTE_CONNECTION;
+        nodeInfo.IsConnected = false;
+
+        nodes.push_back(nodeInfo);
         return ConnectToBlockStatus::ADDED;
     }
     
     void disconnectFromNode(std::string address)
     {
-        auto end = connectedNodes.end();
-        for(auto it = connectedNodes.begin(); it != end; ++it)
-            if ((*it)->GetRemoteAddress() == address)
+        auto end = nodes.end();
+        for(auto it = nodes.begin(); it != end; ++it)
+            if ((*it).Address== address)
             {
-                (*it)->Disconnect();
-                connectedNodes.erase(it);
+                (*it).TcpConnection->Disconnect();
+                nodes.erase(it);
             }
     }
     
     /* Tcp Callbacks */
-    void newNodeConnected(TcpClient& tcpClient)
+    void newNodeConnected(TcpClient* tcpClient)
     {
-        tcpClient.Send("{\"Status\":true,\"Type\":" + std::to_string((int) MessageType::REQ_NODE_INFO) + ",\"Index\":" + std::to_string(chain->GetLastBlock()->Index) + "}");
+        tcpClient->Send("{\"Status\":true,\"Type\":" + std::to_string((int) MessageType::REQ_NODE_INFO) + ",\"Index\":" + std::to_string(chain->GetLastBlock()->Index) + ",\"TcpPort\":" + std::to_string(TCP_PORT) + ",\"HttpPort\":" + std::to_string(HTTP_PORT) + "}");
+
+        auto end = nodes.end();
+        for (auto it = nodes.begin(); it != end; ++it)
+            if (tcpClient->GetRemoteAddress() == (*it).Address && tcpClient->GetRemotePort() == (*it).TcpPort)
+            {
+                (*it).IsConnected = true;
+                break;
+            }
     }
     
-    void tcpClientConnected(TcpClient& tcpClient)
+    void tcpClientConnected(TcpClient* tcpClient)
     {
-        
+        struct NodeInfo nodeInfo;
+        nodeInfo.Address = tcpClient->GetRemoteAddress();
+        nodeInfo.TcpPort = tcpClient->GetRemotePort();
+        nodeInfo.TcpConnection = tcpClient;
+        nodeInfo.ConnectionType = NodeConnectionType::CLIENT;
+        nodeInfo.IsConnected = true;
+
+        nodes.push_back(nodeInfo);
     }
     
-    void tcpClientDisconnected(TcpClient& tcpClient)
+    void tcpClientDisconnected(TcpClient* tcpClient)
     {
-        
+        auto end = nodes.end();
+        for (auto it = nodes.begin(); it != end; ++it)
+            if (tcpClient->GetRemoteAddress() == (*it).Address && tcpClient->GetRemotePort() == (*it).TcpPort)
+            {
+                delete (*it).TcpConnection;
+                nodes.erase(it);
+                break;
+            }
     }
     
     /* Block information received from remote node*/
-    void tcpMessageReceived(std::string const& text, TcpClient& tcpClient)
+    void tcpMessageReceived(std::string const& text, TcpClient* tcpClient)
     {
         struct NodeMessage message(text);
 
@@ -322,12 +369,11 @@ struct BlockChainServerPimpl
                         responseBuffer << chain->GetLastBlock()->Encode();
                         responseBuffer << "}";
 
-                        auto connectedNodesEnd = connectedNodes.end();
-                        for (auto it = connectedNodes.begin(); it != connectedNodesEnd; ++it)
-                            if (tcpClient.GetRemotePort() != (*it)->GetRemotePort() && tcpClient.GetRemoteAddress() != (*it)->GetRemoteAddress())
-                                (*it)->Send(std::move(responseBuffer.str()));
-
-                        tcpSocket->BroadcastMessageExpect(responseBuffer.str(), tcpClient);
+                        auto connectedNodesEnd = nodes.end();
+                        for (auto it = nodes.begin(); it != connectedNodesEnd; ++it)
+                            if (tcpClient != (*it).TcpConnection)
+                                (*it).TcpConnection->Send(std::move(responseBuffer.str()));
+                        
                         break;
                     }
 
@@ -340,7 +386,7 @@ struct BlockChainServerPimpl
                         responseBuffer << lastIndex;
                         responseBuffer << "}";
                         
-                        tcpClient.Send(responseBuffer.str());
+                        tcpClient->Send(responseBuffer.str());
                         
                         break;
                     }
@@ -352,7 +398,7 @@ struct BlockChainServerPimpl
                         responseBuffer << chain->SerializeChain(message.Block->Index);
                         responseBuffer << "}";
                         
-                        tcpClient.Send(responseBuffer.str());
+                        tcpClient->Send(responseBuffer.str());
                         break;
                     }
 
@@ -390,7 +436,7 @@ struct BlockChainServerPimpl
                 responseBuffer << chain->SerializeChain();
                 responseBuffer << "}";
 
-                tcpClient.Send(responseBuffer.str());
+                tcpClient->Send(responseBuffer.str());
                 break;
             }
 
@@ -402,7 +448,7 @@ struct BlockChainServerPimpl
                 responseBuffer << chain->GetLastBlock()->Encode();
                 responseBuffer << "}";
 
-                tcpClient.Send(responseBuffer.str());
+                tcpClient->Send(responseBuffer.str());
                 break;
             }
 
@@ -414,7 +460,7 @@ struct BlockChainServerPimpl
                 responseBuffer << chain->SerializeChain(message.Index);
                 responseBuffer << "}";
 
-                tcpClient.Send(responseBuffer.str());
+                tcpClient->Send(responseBuffer.str());
                 break;
             }
 
@@ -425,14 +471,10 @@ struct BlockChainServerPimpl
 
                 for (auto it = message.Nodes->begin(); it != nodesEnd; ++it)
                 {
-                    std::stringstream ss((*it));
-                    std::string item;
-                    std::vector<std::string> tokens;
-                    while (std::getline(ss, item, ':'))
-                        tokens.push_back(item);
+                    struct AddressPort info(*it);
 
-                    if (tokens.size() == 2)
-                        ConnectToNode(tokens[0], (size_t) stoi(tokens[1]));
+                    if (info.Success)
+                        ConnectToNode(info.Address, info.Port);
                 }
 
                 break;
@@ -441,48 +483,59 @@ struct BlockChainServerPimpl
             case MessageType::REQ_NODE_LIST:
             {
                 INFO << "#REQ_NODE_LIST" << std::endl;
-                auto nodesEnd = connectedNodes.end();
-                auto it = connectedNodes.begin();
+                auto nodesEnd = nodes.end();
+                auto it = nodes.begin();
 
                 std::stringstream responseBuffer;
                 responseBuffer << "{\"Status\":true,\"Nodes\":[";
 
                 if (it != nodesEnd)
                 {
-                    responseBuffer << "\"" << (*it)->GetRemoteAddress() << ":" << (*it)->GetRemotePort() << "\"";
+                    responseBuffer << "\"" << (*it).Address << ":" << (*it).TcpPort << "\"";
                     ++it;
 
                     for (; it != nodesEnd; ++it)
-                        responseBuffer << "," << "\"" << (*it)->GetRemoteAddress() << ":" << (*it)->GetRemotePort() << "\"";
+                        responseBuffer << "," << "\"" << (*it).Address << ":" << (*it).TcpPort << "\"";
                 }
 
                 responseBuffer << "]}";
 
-                tcpClient.Send(responseBuffer.str());
+                tcpClient->Send(responseBuffer.str());
                 break;
             }
                 
-            case MessageType::REQ_NODE_INFO:
-            {
+            case MessageType::REQ_NODE_INFO: {
                 INFO << "#REQ_NODE_INFO" << std::endl;
-                auto nodesEnd = connectedNodes.end();
-                auto it = connectedNodes.begin();
-                
+                auto nodesEnd = nodes.end();
+
                 std::stringstream responseBuffer;
-                responseBuffer << "{\"Status\":true,\"Type\":" + std::to_string((int) MessageType::RES_NODE_INFO) + ",\"Nodes\":[";
-                
-                if (it != nodesEnd)
+                responseBuffer << "{\"Status\":true,\"Type\":" + std::to_string((int) MessageType::RES_NODE_INFO) +
+                                  ",\"TcpPort\":" << TCP_PORT << ",\"HttpPort\":" << HTTP_PORT << ",\"Nodes\":[";
+
+                bool firstNodeAdded = false;
+
+                for (auto it = nodes.begin(); it != nodesEnd; ++it)
                 {
-                    responseBuffer << "\"" << (*it)->GetRemoteAddress() << ":" << (*it)->GetRemotePort() << "\"";
-                    ++it;
-                    
-                    for (; it != nodesEnd; ++it)
-                        responseBuffer << "," << "\"" << (*it)->GetRemoteAddress() << ":" << (*it)->GetRemotePort() << "\"";
+                    if ((*it).ConnectionType == NodeConnectionType::REMOTE_CONNECTION) {
+                        if (firstNodeAdded)
+                            responseBuffer << "," << "\"" << (*it).Address << ":" << (*it).TcpPort << "\"";
+                        else {
+                            firstNodeAdded = true;
+                            responseBuffer << "\"" << (*it).Address << ":" << (*it).TcpPort << "\"";
+                        }
+                    }
+                    else if (tcpClient->GetRemotePort() == (*it).TcpPort && tcpClient->GetRemoteAddress() == (*it).Address)
+                    {
+                        (*it).HttpPort = message.HttpPort;
+                        (*it).TcpPort = message.TcpPort;
+                        (*it).ConnectionType = NodeConnectionType::REMOTE_CONNECTION;
+                    }
                 }
-                
+
                 responseBuffer << "],\"Index\":" << chain->GetLastBlock()->Index << ",\"Blocks\":";
                 responseBuffer << chain->SerializeChain(message.Index) << "}";
-                tcpClient.Send(responseBuffer.str());
+                tcpClient->Send(responseBuffer.str());
+                
                 break;
             }
 
@@ -494,14 +547,9 @@ struct BlockChainServerPimpl
                 
                 for (auto it = message.Nodes->begin(); it != nodesEnd; ++it)
                 {
-                    std::stringstream ss((*it));
-                    std::string item;
-                    std::vector<std::string> tokens;
-                    while (std::getline(ss, item, ':'))
-                        tokens.push_back(item);
-                    
-                    if (tokens.size() == 2)
-                        ConnectToNode(tokens[0], (size_t) stoi(tokens[1]));
+                    struct AddressPort info(*it);
+                    if (info.Success)
+                        ConnectToNode(info.Address, info.Port);
                 }
                 
                 break;

@@ -8,9 +8,9 @@ namespace blockchain {
         class TcpClient {
         public:
 
-            typedef std::function<void(std::string const &, TcpClient &)> MessageCallback;
-            typedef std::function<void(TcpClient &)> DisconnectCallback;
-            typedef std::function<void(TcpClient &)> ConnectCallback;
+            typedef std::function<void(std::string const &, TcpClient *)> MessageCallback;
+            typedef std::function<void(TcpClient *)> DisconnectCallback;
+            typedef std::function<void(TcpClient *)> ConnectCallback;
 
             virtual void Connect(std::string, size_t port) = 0;
             virtual void Disconnect() = 0;

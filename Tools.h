@@ -5,8 +5,12 @@
 #include <sstream>
 #include <chrono>
 #include <ctime>
+#include <sstream>
+#include <iostream>
+#include <string>
 
 #include <Config.h>
+#include <sha256.h>
 
 static long int getTimestamp()
 {
@@ -53,3 +57,25 @@ inline static bool isInteger(char const* str)
 {
 	return strlen(str) != 0 && strspn(str, "0123456789") == strlen(str);
 }
+
+struct AddressPort {
+	AddressPort(std::string& data)
+	{
+		std::stringstream ss(data);
+		std::string item;
+		std::vector<std::string> tokens;
+		while (std::getline(ss, item, ':'))
+			tokens.push_back(item);
+
+		if (tokens.size() == 2 && isInteger(tokens[1].c_str()))
+		{
+			Address = tokens[0];
+			Port = (size_t)std::stoi(tokens[1]);
+			Success = true;
+		}
+	}
+
+	bool Success;
+	std::string Address;
+	size_t Port;
+};
