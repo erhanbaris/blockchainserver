@@ -29,12 +29,12 @@ std::string Block::Encode()
 	std::string encodedData;
 	Base64::Encode(Data, &encodedData);
 	stream << "{"
-			<< "\"Index\":" << Index << ","
-			<< "\"Hash\":\"" << Hash << "\","
-			<< "\"PreviousHash\":\"" << PreviousHash << "\","
-			<< "\"TimeStamp\":" << TimeStamp << ","
-			<< "\"Nonce\":" << Nonce << ","
-			<< "\"Data\":\"" << encodedData << "\""
+		<< "\"Index\":" << Index << ","
+		<< "\"Hash\":\"" << Hash << "\","
+		<< "\"PreviousHash\":\"" << PreviousHash << "\","
+		<< "\"TimeStamp\":" << TimeStamp << ","
+		<< "\"Nonce\":" << Nonce << ","
+		<< "\"Data\":\"" << encodedData << "\""
 		<< "}";
 
 	return stream.str();
@@ -46,8 +46,8 @@ namespace
 	{
 		Block* newBlock = new Block;
 		newBlock->Hash = json["Hash"].string_value();
-		newBlock->Index = (size_t) json["Index"].int_value();
-		newBlock->Nonce = (size_t) json["Nonce"].int_value();
+		newBlock->Index = (size_t)json["Index"].int_value();
+		newBlock->Nonce = (size_t)json["Nonce"].int_value();
 		newBlock->TimeStamp = json["TimeStamp"].int_value();
 		newBlock->PreviousHash = json["PreviousHash"].string_value();
 		auto data = json["Data"].string_value();
@@ -79,21 +79,21 @@ void Block::Decode(json11::Json const& json, std::vector<Block*>& blocks)
 {
 	if (json.is_array())
 	{
-        Block* newBlock = NULL;
+		Block* newBlock = NULL;
 		auto jsonArray = json.array_items();
 		auto end = jsonArray.end();
 		for (auto it = jsonArray.begin(); it != end; ++it)
 		{
 			auto block = fetchBlocksFromJson(*it);
-            blocks.push_back(block);
-            
+			blocks.push_back(block);
+
 			newBlock = block;
 		}
 	}
 	else
 	{
 		Block* newBlock = fetchBlocksFromJson(json);
-        blocks.push_back(newBlock);
+		blocks.push_back(newBlock);
 
 	}
 }

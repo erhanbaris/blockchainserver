@@ -6,13 +6,13 @@
 #define TCP_SERVER_PORT 8081
 
 #ifdef MINING_ACTIVE
-	#define DIFFICULTY 4	
-	#define NOUNCE_ZEROS "0000"
-	#define MAX_NOUNCE 999999999999
+#define DIFFICULTY 4	
+#define NOUNCE_ZEROS "0000"
+#define MAX_NOUNCE 999999999999
 #else 
-	#define DIFFICULTY 0	
-	#define NOUNCE_ZEROS ""
-	#define MAX_NOUNCE 1
+#define DIFFICULTY 0	
+#define NOUNCE_ZEROS ""
+#define MAX_NOUNCE 1
 #endif
 
 #define INFO std::cout << std::endl

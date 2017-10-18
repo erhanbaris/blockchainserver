@@ -16,14 +16,14 @@ typedef std::function<void(std::string&, std::stringstream &)> OperationCallback
 struct BlockChainServerPimpl;
 class BlockChainServer
 {
-    public:
-        BlockChainServer();
-        ~BlockChainServer();
+public:
+	BlockChainServer();
+	~BlockChainServer();
 
-        void Start(size_t port);
-        void Stop();
-		void SetTcpServer(TcpServer*);
+	void Start(size_t port);
+	void Stop();
+	void SetTcpServer(TcpServer*);
 
-    private:
-        BlockChainServerPimpl* pimpl;
+private:
+	BlockChainServerPimpl* pimpl;
 };

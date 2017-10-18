@@ -19,7 +19,7 @@ struct Block
 	void SetHash();
 	MineInfo CalculateHash();
 	std::string Encode();
-	
+
 	static void Decode(std::string const& message, Block*& newBlock);
 	static void Decode(std::string const& message, std::vector<Block*>& blocks);
 

@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 				ALERT << "Http server port is invalid.";
 				return 1;
 			}
-			HTTP_PORT = (size_t) stoi(argv[i + 1]);
+			HTTP_PORT = (size_t)stoi(argv[i + 1]);
 		}
 		else if (strcmp(argv[i], "--tcp-port") == 0)
 		{
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 				ALERT << "Tcp server port is invalid.";
 				return 1;
 			}
-			TCP_PORT = (size_t) stoi(argv[i + 1]);
+			TCP_PORT = (size_t)stoi(argv[i + 1]);
 		}
 		else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
 		{
@@ -62,19 +62,19 @@ int main(int argc, char *argv[])
 		}
 	}
 
-    loop = uv_default_loop();
+	loop = uv_default_loop();
 
-    INFO << "Tcp Server Port : " << TCP_PORT;
-    TcpServer* tcpServer = new TcpServerUv;
-    tcpServer->Start(TCP_PORT);
-    INFO << "Tcp Server Started";
+	INFO << "Tcp Server Port : " << TCP_PORT;
+	TcpServer* tcpServer = new TcpServerUv;
+	tcpServer->Start(TCP_PORT);
+	INFO << "Tcp Server Started";
 
 
-    INFO << "Http Server Port : " << HTTP_PORT;
-    BlockChainServer server;
+	INFO << "Http Server Port : " << HTTP_PORT;
+	BlockChainServer server;
 	server.SetTcpServer(tcpServer);
-    server.Start(HTTP_PORT);
+	server.Start(HTTP_PORT);
 
 	uv_run(loop, UV_RUN_DEFAULT);
-    return 0;
+	return 0;
 }

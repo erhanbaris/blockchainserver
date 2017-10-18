@@ -13,16 +13,16 @@ using namespace blockchain::tcp;
 struct TcpServerUvPimpl;
 class TcpServerUv : public TcpServer {
 public:
-    TcpServerUv();
+	TcpServerUv();
 	void Start(size_t port);
 	void Stop();
-    size_t GetPort();
-    TcpClient* CreateClient();
-    
-    void SetMessageReceived(MessageReceivedCallback);
+	size_t GetPort();
+	TcpClient* CreateClient();
+
+	void SetMessageReceived(MessageReceivedCallback);
 	void SetClientConnected(ClientConnectedCallback);
 	void SetClientDisconnected(ClientDisconnectedCallback);
-    
+
 private:
-    TcpServerUvPimpl *pimpl;
+	TcpServerUvPimpl *pimpl;
 };
